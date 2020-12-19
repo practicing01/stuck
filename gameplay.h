@@ -5,15 +5,17 @@
 #include "moduleLoop.h"
 #include "stuck.h"
 
-enum NodeType {BUILDING, PROP, COLLECTABLE, NPC, PLAYER, FLOOR};
-
 #define MAXBUILDINGS 4
 #define MAXFLOORS 1
 #define MAXPLAYERS 1
 #define MAXPROPS 8
 #define MAXCOLLECTIBLES 1
 #define MAXNPCS 8
-#define TILESIZE 200.0f;
+#define TILESIZE 200.0f
+#define MAXANIMSTATES 2
+
+enum NodeType {BUILDING, PROP, COLLECTABLE, NPC, PLAYER, FLOOR};
+enum PlayerState {IDLE, RUN};
 
 struct Node
 {
@@ -51,6 +53,26 @@ struct Tile
 	struct Tile *prev, *next;
 };
 
+struct PlayerAnim
+{
+	int startFrame;
+	int endFrame;
+	int id;
+	float timeInterval;
+};
+
+struct Player
+{
+	struct Node node;
+	enum PlayerState state;
+	int curFrame;
+	float elapsedTime;
+	struct PlayerAnim *anims;
+	int stateAnims[MAXANIMSTATES];
+	
+	struct Player *prev, *next;
+};
+
 struct GameplayData
 {
 	int buildingCount;
@@ -69,9 +91,13 @@ struct GameplayData
 	struct Tile *tileListStart, *tileListEnd;
 	struct Tile *tileListSwapStart, *tileListSwapEnd;
 	
+	struct Player *playerListStart, *playerListEnd;
+	
 	Camera3D camera;
 };
 
+void InitPlayers();
+void RemovePlayers();
 void PopulateModelCache(char *curDir, Model *models, int *modelCount, int maxCount);
 void InitTiles();
 void RemoveTiles();

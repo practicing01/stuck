@@ -4,6 +4,7 @@
 #include "gameplay.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <math.h>
 #include "raymath.h"
 
@@ -100,7 +101,7 @@ void InitTiles()
 	(* (struct GameplayData *)moduleData).tileListStart = dummy.prev;
 	(* (struct GameplayData *)moduleData).tileListEnd = dummy.next;
 	
-	TraceLog(LOG_INFO, "inited tiles");
+	//TraceLog(LOG_INFO, "inited tiles");
 }
 
 void PopulateModelCache(char *curDir, Model *models, int *modelCount, int maxCount)
@@ -114,6 +115,7 @@ void PopulateModelCache(char *curDir, Model *models, int *modelCount, int maxCou
     for (int x = 0; x < fileCount; x++)
     {
 		char filePath[1024];
+		memset(filePath, '\0', sizeof(char) * 1024);
 		strcpy(filePath, curDir );
 		strcat(filePath, "/");
 		strcat(filePath, files[x]);
@@ -150,6 +152,152 @@ void PopulateModelCache(char *curDir, Model *models, int *modelCount, int maxCou
 	ClearDirectoryFiles();
 }
 
+void RemovePlayers()
+{
+	struct Player *curNode;
+	struct Player *nextNode;
+	curNode = (* (struct GameplayData *)moduleData).playerListStart;
+	
+	while (curNode != NULL)
+	{
+		free( (*curNode).anims );
+		
+		nextNode = (*curNode).next;
+		
+		free(curNode);
+		
+		curNode = nextNode;
+	}
+	
+	(* (struct GameplayData *)moduleData).playerListStart = NULL;
+	(* (struct GameplayData *)moduleData).playerListEnd = NULL;
+}
+
+void InitPlayers()
+{
+	struct Player dummy;
+	dummy.prev = NULL;
+	dummy.next = NULL;
+	
+	const char *workDir = GetWorkingDirectory();
+	char curDir[1024];
+	
+	memset(curDir, '\0', sizeof(char) * 1024);
+	strcpy(curDir, workDir );
+	strcat(curDir, "/art/gfx/players");
+	
+	(* (struct GameplayData *)moduleData).playerCount = 0;
+	memset( (* (struct GameplayData *)moduleData).playerModels , '\0', sizeof(Model) * MAXPLAYERS);
+	
+	int fileCount = 0;
+    char **files = GetDirectoryFiles(curDir, &fileCount);
+    
+    for (int x = 0; x < fileCount; x++)
+    {
+		char filePath[1024];
+		memset(filePath, '\0', sizeof(char) * 1024);
+		strcpy(filePath, curDir );
+		strcat(filePath, "/");
+		strcat(filePath, files[x]);
+		//TraceLog(LOG_INFO, filePath);
+		
+		if (DirectoryExists(filePath))
+		{
+			if (strcmp(files[x], ".") != 0 && strcmp(files[x], ".."))
+			{
+				//TraceLog(LOG_INFO, filePath);
+				//PopulateModelCache(filePath, models, modelCount, maxCount);//bugged to recurse, not sure if my code or raylibs (get/clear Dir)
+			}
+		}
+		else//not a directory
+		{
+			if (FileExists(filePath) && IsFileExtension(files[x], ".glb"))
+			{
+				if ( (* (struct GameplayData *)moduleData).playerCount >= MAXPLAYERS )
+				{
+					TraceLog(LOG_INFO, "maxCount");
+					break;
+				}
+				
+				//TraceLog(LOG_INFO, filePath);
+				//TraceLog(LOG_INFO, files[x]);
+								
+				*( (* (struct GameplayData *)moduleData).playerModels + (* (struct GameplayData *)moduleData).playerCount ) = LoadModel( filePath );
+				
+				( (* (struct GameplayData *)moduleData).playerCount ) ++;
+				
+				char animFilePath[1024];
+				memset(animFilePath, '\0', sizeof(char) * 1024);
+				strcpy(animFilePath, curDir );
+				strcat(animFilePath, "/");
+				strcat(animFilePath, GetFileNameWithoutExt(files[x]) );
+				strcat(animFilePath, ".txt");
+				
+				FILE *fp;
+				char buff[255];
+				memset(buff, '\0', sizeof(char) * 255);
+				fp = fopen(animFilePath, "r");
+				fgets(buff, 255, fp);
+				TraceLog(LOG_INFO, buff);
+				
+				int animCount = atoi(buff);
+				
+				struct Player *newPlayer = (struct Player *)malloc( sizeof(struct Player) );
+			
+				(*newPlayer).prev = NULL;
+				(*newPlayer).next = NULL;
+				
+				if (dummy.prev == NULL)
+				{
+					dummy.prev = newPlayer;
+					dummy.next = newPlayer;
+				}
+				else
+				{
+					(*newPlayer).prev = dummy.next;
+					(*dummy.next).next = newPlayer;
+					dummy.next = newPlayer;
+				}
+				
+				(*newPlayer).anims = (struct PlayerAnim *)malloc( sizeof(struct PlayerAnim) * animCount);
+				(*newPlayer).node.modelIndex = ((* (struct GameplayData *)moduleData).playerCount) - 1;
+				
+				for (int y = 0; y < animCount; y++)
+				{
+					memset(buff, '\0', sizeof(char) * 255);
+					fgets(buff, 255, fp);
+					(* ( (*newPlayer).anims + y) ).startFrame = atoi(buff);
+
+					memset(buff, '\0', sizeof(char) * 255);
+					fgets(buff, 255, fp);
+					(* ( (*newPlayer).anims + y) ).endFrame = atoi(buff);
+					
+					memset(buff, '\0', sizeof(char) * 255);
+					fgets(buff, 255, fp);
+					(* ( (*newPlayer).anims + y) ).id = atoi(buff);
+					
+					if ( (* ( (*newPlayer).anims + y) ).id < MAXANIMSTATES )
+					{
+						(*newPlayer).stateAnims[ (* ( (*newPlayer).anims + y) ).id ] = y;
+					}
+					
+					memset(buff, '\0', sizeof(char) * 255);
+					fgets(buff, 255, fp);
+					(* ( (*newPlayer).anims + y) ).timeInterval = atof(buff);
+				}
+				
+				fclose(fp);
+				
+			}
+		}
+	}
+	
+	(* (struct GameplayData *)moduleData).playerListStart = dummy.prev;
+	(* (struct GameplayData *)moduleData).playerListEnd = dummy.next;
+	
+	ClearDirectoryFiles();
+}
+
 void GameplayInit()
 {
 	SetWindowSize(1024, 768);
@@ -177,6 +325,10 @@ void GameplayInit()
 	(*data).tileListEnd = NULL;
 	InitTiles();
 	
+	(*data).playerListStart = NULL;
+	(*data).playerListEnd = NULL;
+	InitPlayers();
+	
 	drawNodesCam.position = (Vector3){ 0.0f, 10.0f, 10.0f };
     drawNodesCam.target = (Vector3){ 0.0f, 0.0f, 0.0f };
     drawNodesCam.up = (Vector3){ 0.0f, 1.0f, 0.0f };
@@ -191,6 +343,7 @@ void GameplayInit()
 void GameplayExit()
 {
 	RemoveTiles();
+	RemovePlayers();
 	
 	for (int x = 0; x < (* (struct GameplayData *)moduleData).buildingCount; x++)
 	{
@@ -200,6 +353,11 @@ void GameplayExit()
 	for (int x = 0; x < (* (struct GameplayData *)moduleData).floorCount; x++)
 	{
 		UnloadModel( (* (struct GameplayData *)moduleData).floorModels[x]);
+	}
+	
+	for (int x = 0; x < (* (struct GameplayData *)moduleData).playerCount; x++)
+	{
+		UnloadModel( (* (struct GameplayData *)moduleData).playerModels[x]);
 	}
 }
 
