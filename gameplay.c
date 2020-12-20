@@ -13,19 +13,15 @@ void DrawTiles()
 	struct Tile *curNode;
 	struct Tile *nextNode;
 	curNode = (* (struct GameplayData *)moduleData).tileListStart;
-	
-	BeginMode3D(drawNodesCam);
-		ClearBackground(RAYWHITE);
 		
-		while (curNode != NULL)
-		{
-			DrawModel( (* (struct GameplayData *)moduleData).floorModels[ (* (*curNode).floor).modelIndex], (* (*curNode).floor).position, 1.0f, WHITE);
-			DrawModel( (* (struct GameplayData *)moduleData).buildingModels[ (* (*curNode).building).modelIndex], (* (*curNode).building).position, 1.0f, WHITE);
-			
-			curNode = (*curNode).next;
-		}
-	
-	EndMode3D();
+	while (curNode != NULL)
+	{
+		DrawModel( (* (struct GameplayData *)moduleData).floorModels[ (* (*curNode).floor).modelIndex], (* (*curNode).floor).position, 1.0f, WHITE);
+		DrawModel( (* (struct GameplayData *)moduleData).buildingModels[ (* (*curNode).building).modelIndex], (* (*curNode).building).position, 1.0f, WHITE);
+		
+		curNode = (*curNode).next;
+	}
+
 }
 
 void RemoveTiles()
@@ -261,6 +257,10 @@ void InitPlayers()
 				
 				(*newPlayer).anims = (struct PlayerAnim *)malloc( sizeof(struct PlayerAnim) * animCount);
 				(*newPlayer).node.modelIndex = ((* (struct GameplayData *)moduleData).playerCount) - 1;
+				(*newPlayer).node.type = PLAYER;
+				(*newPlayer).state = IDLE;
+				(*newPlayer).elapsedTime = 0.0f;
+				(*newPlayer).curFrame = 0;
 				
 				for (int y = 0; y < animCount; y++)
 				{
@@ -294,8 +294,63 @@ void InitPlayers()
 	
 	(* (struct GameplayData *)moduleData).playerListStart = dummy.prev;
 	(* (struct GameplayData *)moduleData).playerListEnd = dummy.next;
+	(* (struct GameplayData *)moduleData).curPlayer = dummy.prev;
 	
 	ClearDirectoryFiles();
+}
+
+void UpdatePlayerState()
+{
+	bool updateAnim = false;
+	
+	if ( IsKeyDown(KEY_UP) || IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_RIGHT) )
+	{
+		updateAnim = true;
+		(* (* (struct GameplayData *)moduleData).curPlayer).elapsedTime += dt.deltaTime;
+	}
+	
+	if (updateAnim == true && (* (* (struct GameplayData *)moduleData).curPlayer).state == IDLE )
+	{
+		(* (* (struct GameplayData *)moduleData).curPlayer).elapsedTime = 0.0f;
+		(* (* (struct GameplayData *)moduleData).curPlayer).state = RUN;
+		
+		(* (* (struct GameplayData *)moduleData).curPlayer).curFrame = (* ( (* (* (struct GameplayData *)moduleData).curPlayer).anims + (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ) ).startFrame;
+	}
+	else if (updateAnim == false && (* (* (struct GameplayData *)moduleData).curPlayer).state == RUN )
+	{
+		(* (* (struct GameplayData *)moduleData).curPlayer).elapsedTime = 0.0f;
+		(* (* (struct GameplayData *)moduleData).curPlayer).state = IDLE;
+		
+		(* (* (struct GameplayData *)moduleData).curPlayer).curFrame = (* ( (* (* (struct GameplayData *)moduleData).curPlayer).anims + (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ) ).startFrame;
+	}
+	
+	if
+	( 
+	
+	(* (* (struct GameplayData *)moduleData).curPlayer).elapsedTime >=
+	(* ( (* (* (struct GameplayData *)moduleData).curPlayer).anims + (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ) ).timeInterval
+	
+	)
+	{
+		(* (* (struct GameplayData *)moduleData).curPlayer).elapsedTime = 0.0f;
+		(* (* (struct GameplayData *)moduleData).curPlayer).curFrame += 1;
+		
+		if
+		(
+		
+		(* (* (struct GameplayData *)moduleData).curPlayer).curFrame >
+		(* ( (* (* (struct GameplayData *)moduleData).curPlayer).anims + (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ) ).endFrame
+		
+		)
+		{
+			(* (* (struct GameplayData *)moduleData).curPlayer).curFrame = (* ( (* (* (struct GameplayData *)moduleData).curPlayer).anims + (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ) ).startFrame;
+		}
+	}
+}
+
+void DrawPlayer()
+{
+	DrawModel( (* (struct GameplayData *)moduleData).playerModels[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex], (* (* (struct GameplayData *)moduleData).curPlayer).node.position, 1.0f, WHITE);
 }
 
 void GameplayInit()
@@ -364,11 +419,20 @@ void GameplayExit()
 void GameplayLoop()
 {
 	UpdateEditorCamera(&drawNodesCam);
+	UpdatePlayerState();
 	
 	BeginDrawing();
 	
+	BeginMode3D(drawNodesCam);
+
+	ClearBackground(RAYWHITE);
+	
 	DrawTiles();
 	
+	DrawPlayer();
+	
+	EndMode3D();
+
 	EndDrawing();
 	
 	if (WindowShouldClose())

@@ -91,11 +91,13 @@ struct GameplayData
 	struct Tile *tileListStart, *tileListEnd;
 	struct Tile *tileListSwapStart, *tileListSwapEnd;
 	
-	struct Player *playerListStart, *playerListEnd;
+	struct Player *playerListStart, *playerListEnd, *curPlayer;
 	
 	Camera3D camera;
 };
 
+void DrawPlayer();
+void UpdatePlayerState();
 void InitPlayers();
 void RemovePlayers();
 void PopulateModelCache(char *curDir, Model *models, int *modelCount, int maxCount);
