@@ -184,6 +184,7 @@ void InitPlayers()
 	
 	(* (struct GameplayData *)moduleData).playerCount = 0;
 	memset( (* (struct GameplayData *)moduleData).playerModels , '\0', sizeof(Model) * MAXPLAYERS);
+	memset( (* (struct GameplayData *)moduleData).playerAnims , '\0', sizeof(Model) * MAXPLAYERS);
 	
 	int fileCount = 0;
     char **files = GetDirectoryFiles(curDir, &fileCount);
@@ -207,7 +208,7 @@ void InitPlayers()
 		}
 		else//not a directory
 		{
-			if (FileExists(filePath) && IsFileExtension(files[x], ".glb"))
+			if (FileExists(filePath) && IsFileExtension(files[x], ".iqm"))
 			{
 				if ( (* (struct GameplayData *)moduleData).playerCount >= MAXPLAYERS )
 				{
@@ -219,6 +220,23 @@ void InitPlayers()
 				//TraceLog(LOG_INFO, files[x]);
 								
 				*( (* (struct GameplayData *)moduleData).playerModels + (* (struct GameplayData *)moduleData).playerCount ) = LoadModel( filePath );
+				
+				int animsCount = 0;
+				*( (* (struct GameplayData *)moduleData).playerAnims + (* (struct GameplayData *)moduleData).playerCount ) = LoadModelAnimations( filePath, &animsCount );
+				
+				char texFilePath[1024];
+				memset(texFilePath, '\0', sizeof(char) * 1024);
+				strcpy(texFilePath, curDir );
+				strcat(texFilePath, "/");
+				strcat(texFilePath, GetFileNameWithoutExt(files[x]) );
+				strcat(texFilePath, ".png");
+				
+				*( (* (struct GameplayData *)moduleData).playerTex + (* (struct GameplayData *)moduleData).playerCount ) = LoadTexture( texFilePath );
+				
+				SetMaterialTexture(
+				&(*( (* (struct GameplayData *)moduleData).playerModels + (* (struct GameplayData *)moduleData).playerCount )).materials[0],
+				MAP_DIFFUSE,
+				*( (* (struct GameplayData *)moduleData).playerTex + (* (struct GameplayData *)moduleData).playerCount ) );
 				
 				( (* (struct GameplayData *)moduleData).playerCount ) ++;
 				
@@ -413,6 +431,16 @@ void GameplayExit()
 	for (int x = 0; x < (* (struct GameplayData *)moduleData).playerCount; x++)
 	{
 		UnloadModel( (* (struct GameplayData *)moduleData).playerModels[x]);
+	}
+	
+	for (int x = 0; x < (* (struct GameplayData *)moduleData).playerCount; x++)
+	{
+		UnloadModelAnimation( * ( (* (struct GameplayData *)moduleData).playerAnims[x] ) );
+	}
+	
+	for (int x = 0; x < (* (struct GameplayData *)moduleData).playerCount; x++)
+	{
+		UnloadTexture( (* (struct GameplayData *)moduleData).playerTex[x]);
 	}
 }
 

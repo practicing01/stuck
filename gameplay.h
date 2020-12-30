@@ -81,6 +81,8 @@ struct GameplayData
 	Model floorModels[MAXFLOORS];
 	int playerCount;
 	Model playerModels[MAXPLAYERS];
+	ModelAnimation *playerAnims[MAXPLAYERS];
+	Texture2D playerTex[MAXPLAYERS];
 	int propCount;
 	Model propModels[MAXPROPS];
 	int collectibleCount;
