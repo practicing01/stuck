@@ -364,6 +364,11 @@ void UpdatePlayerState()
 			(* (* (struct GameplayData *)moduleData).curPlayer).curFrame = (* ( (* (* (struct GameplayData *)moduleData).curPlayer).anims + (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ) ).startFrame;
 		}
 	}
+	
+	UpdateModelAnimation(
+	(* (struct GameplayData *)moduleData).playerModels[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex],
+	*( (* (struct GameplayData *)moduleData).playerAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex ] ),
+	(* (* (struct GameplayData *)moduleData).curPlayer).curFrame);
 }
 
 void DrawPlayer()
