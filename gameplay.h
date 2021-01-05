@@ -13,6 +13,8 @@
 #define MAXNPCS 8
 #define TILESIZE 200.0f
 #define MAXANIMSTATES 2
+#define ROTMINCLAMP 180.0f
+#define ROTMAXCLAMP -180.0f
 
 enum NodeType {BUILDING, PROP, COLLECTABLE, NPC, PLAYER, FLOOR};
 enum PlayerState {IDLE, RUN};
@@ -75,6 +77,9 @@ struct Player
 
 struct GameplayData
 {
+	Vector3 moveDir;
+	float playerRotAngle;
+	
 	int buildingCount;
 	Model buildingModels[MAXBUILDINGS];
 	int floorCount;
@@ -90,19 +95,21 @@ struct GameplayData
 	int npcCount;
 	Model npcModels[MAXNPCS];
 	
-	struct Tile *tileListStart, *tileListEnd;
-	struct Tile *tileListSwapStart, *tileListSwapEnd;
+	struct Tile *tileListStart, *tileListEnd, *curTile;
 	
 	struct Player *playerListStart, *playerListEnd, *curPlayer;
 	
 	Camera3D camera;
 };
 
+void ClampPlayerRot(float *rot);
 void DrawPlayer();
+void MovePlayer();
 void UpdatePlayerState();
 void InitPlayers();
 void RemovePlayers();
 void PopulateModelCache(char *curDir, Model *models, int *modelCount, int maxCount);
+void CheckTileCollision();
 void InitTiles();
 void RemoveTiles();
 void DrawTiles();

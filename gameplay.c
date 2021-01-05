@@ -317,11 +317,57 @@ void InitPlayers()
 	ClearDirectoryFiles();
 }
 
+void ClampPlayerRot(float *rot)
+{
+	if ( *rot < ROTMAXCLAMP * DEG2RAD )
+	{
+		*rot = ROTMINCLAMP * DEG2RAD;
+	}
+	else if ( *rot > ROTMINCLAMP * DEG2RAD )
+	{
+		*rot = ROTMAXCLAMP * DEG2RAD;
+	}
+}
+
 void UpdatePlayerState()
 {
 	bool updateAnim = false;
 	
-	if ( IsKeyDown(KEY_UP) || IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_RIGHT) )
+	if ( IsKeyDown(KEY_LEFT) )
+	{
+		(* (struct GameplayData *)moduleData).moveDir.x = -1.0f;
+		
+		(* (struct GameplayData *)moduleData).playerRotAngle -= 5.0f * dt.deltaTime;
+		
+		ClampPlayerRot( &( (* (struct GameplayData *)moduleData).playerRotAngle ) );
+	}
+	else if ( IsKeyDown(KEY_RIGHT) )
+	{
+		(* (struct GameplayData *)moduleData).moveDir.x = 1.0f;
+		
+		(* (struct GameplayData *)moduleData).playerRotAngle += 5.0f * dt.deltaTime;
+		
+		ClampPlayerRot( &( (* (struct GameplayData *)moduleData).playerRotAngle ) );
+	}
+	else
+	{
+		(* (struct GameplayData *)moduleData).moveDir.x = 0.0f;
+	}
+	
+	if ( IsKeyDown(KEY_DOWN) )
+	{
+		(* (struct GameplayData *)moduleData).moveDir.z = -1.0f;
+	}
+	else if ( IsKeyDown(KEY_UP) )
+	{
+		(* (struct GameplayData *)moduleData).moveDir.z = 1.0f;
+	}
+	else
+	{
+		(* (struct GameplayData *)moduleData).moveDir.z = 0.0f;
+	}
+	
+	if ( (* (struct GameplayData *)moduleData).moveDir.x != 0.0f || (* (struct GameplayData *)moduleData).moveDir.z != 0.0f )
 	{
 		updateAnim = true;
 		(* (* (struct GameplayData *)moduleData).curPlayer).elapsedTime += dt.deltaTime;
@@ -376,6 +422,69 @@ void DrawPlayer()
 	DrawModel( (* (struct GameplayData *)moduleData).playerModels[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex], (* (* (struct GameplayData *)moduleData).curPlayer).node.position, 1.0f, WHITE);
 }
 
+void CheckTileCollision()
+{
+	//temporary debugging code
+	struct Tile *curNode;
+	struct Tile *nextNode;
+	struct Tile *closestTile;
+	curNode = (* (struct GameplayData *)moduleData).tileListStart;
+	closestTile = curNode;
+	
+	float dist = Vector3Distance( (* (* (struct GameplayData *)moduleData).curPlayer).node.position, (* (*curNode).floor).position );
+		
+	while (curNode != NULL)
+	{
+		float newDist = Vector3Distance( (* (* (struct GameplayData *)moduleData).curPlayer).node.position, (* (*curNode).floor).position );
+		
+		if ( newDist < dist )
+		{
+			dist = newDist;
+			closestTile = curNode;
+		}
+				
+		curNode = (*curNode).next;
+	}
+	
+	(* (struct GameplayData *)moduleData).curTile = closestTile;
+	//
+}
+
+void MovePlayer()//TODO: figure out why player/model sometimes doesn't load.
+{
+	CheckTileCollision();
+	
+	Model *model = &( (* (struct GameplayData *)moduleData).playerModels[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex] );
+	
+	Matrix translation = MatrixTranslate( 
+	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.x,
+	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.y,
+	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.z );
+	
+	Matrix rotation = MatrixRotateXYZ( (Vector3){0.0f, (* (struct GameplayData *)moduleData).playerRotAngle, 0.0f} );
+	Matrix transform = MatrixMultiply(rotation, translation);
+	
+	(*model).transform = transform;
+	
+	if ( (* (struct GameplayData *)moduleData).moveDir.z != 0.0f )
+	{
+		Vector3 forwardDir = (Vector3){transform.m8, transform.m9, transform.m10};
+		forwardDir = Vector3Negate(forwardDir);
+		
+		Vector3 offset = Vector3Scale(forwardDir, ( (* (struct GameplayData *)moduleData).moveDir.z) * 0.1f);
+		
+		offset = Vector3Add(offset, (* (* (struct GameplayData *)moduleData).curPlayer).node.position);
+		
+		(* (* (struct GameplayData *)moduleData).curPlayer).node.position = offset;
+		
+		translation = MatrixTranslate( offset.x, offset.y, offset.z );
+		
+		(*model).transform = MatrixMultiply(rotation, translation);
+	}
+	
+	
+}
+
 void GameplayInit()
 {
 	SetWindowSize(1024, 768);
@@ -406,6 +515,9 @@ void GameplayInit()
 	(*data).playerListStart = NULL;
 	(*data).playerListEnd = NULL;
 	InitPlayers();
+	
+	(*data).moveDir.x = 0.0f;(*data).moveDir.y = 0.0f;(*data).moveDir.z = 0.0f;
+	(*data).playerRotAngle = 0.0f;
 	
 	drawNodesCam.position = (Vector3){ 0.0f, 10.0f, 10.0f };
     drawNodesCam.target = (Vector3){ 0.0f, 0.0f, 0.0f };
@@ -453,6 +565,7 @@ void GameplayLoop()
 {
 	UpdateEditorCamera(&drawNodesCam);
 	UpdatePlayerState();
+	MovePlayer();
 	
 	BeginDrawing();
 	
