@@ -16,8 +16,8 @@ void DrawTiles()
 		
 	while (curNode != NULL)
 	{
-		DrawModel( (* (struct GameplayData *)moduleData).floorModels[ (* (*curNode).floor).modelIndex], (* (*curNode).floor).position, 1.0f, WHITE);
-		DrawModel( (* (struct GameplayData *)moduleData).buildingModels[ (* (*curNode).building).modelIndex], (* (*curNode).building).position, 1.0f, WHITE);
+		DrawModel( (* (struct GameplayData *)moduleData).floorModels[ (* (*curNode).floor).modelIndex ], (* (*curNode).floor).position, 1.0f, WHITE);
+		DrawModel( (* (struct GameplayData *)moduleData).buildingModels[ (* (*curNode).building).modelIndex ], (* (*curNode).building).position, 1.0f, WHITE);
 		
 		curNode = (*curNode).next;
 	}
@@ -184,7 +184,8 @@ void InitPlayers()
 	
 	(* (struct GameplayData *)moduleData).playerCount = 0;
 	memset( (* (struct GameplayData *)moduleData).playerModels , '\0', sizeof(Model) * MAXPLAYERS);
-	memset( (* (struct GameplayData *)moduleData).playerAnims , '\0', sizeof(Model) * MAXPLAYERS);
+	memset( (* (struct GameplayData *)moduleData).playerAnims , '\0', sizeof(ModelAnimation*) * MAXPLAYERS);
+	memset( (* (struct GameplayData *)moduleData).playerTex , '\0', sizeof(Texture2D) * MAXPLAYERS);
 	
 	int fileCount = 0;
     char **files = GetDirectoryFiles(curDir, &fileCount);
@@ -219,10 +220,10 @@ void InitPlayers()
 				//TraceLog(LOG_INFO, filePath);
 				//TraceLog(LOG_INFO, files[x]);
 								
-				*( (* (struct GameplayData *)moduleData).playerModels + (* (struct GameplayData *)moduleData).playerCount ) = LoadModel( filePath );
+				(* (struct GameplayData *)moduleData).playerModels[ (* (struct GameplayData *)moduleData).playerCount ] = LoadModel( filePath );
 				
 				int animsCount = 0;
-				*( (* (struct GameplayData *)moduleData).playerAnims + (* (struct GameplayData *)moduleData).playerCount ) = LoadModelAnimations( filePath, &animsCount );
+				(* (struct GameplayData *)moduleData).playerAnims[ (* (struct GameplayData *)moduleData).playerCount ] = LoadModelAnimations( filePath, &animsCount );
 				
 				char texFilePath[1024];
 				memset(texFilePath, '\0', sizeof(char) * 1024);
@@ -231,15 +232,37 @@ void InitPlayers()
 				strcat(texFilePath, GetFileNameWithoutExt(files[x]) );
 				strcat(texFilePath, ".png");
 				
-				*( (* (struct GameplayData *)moduleData).playerTex + (* (struct GameplayData *)moduleData).playerCount ) = LoadTexture( texFilePath );
+				(* (struct GameplayData *)moduleData).playerTex[ (* (struct GameplayData *)moduleData).playerCount ] = LoadTexture( texFilePath );
 				
 				SetMaterialTexture(
-				&(*( (* (struct GameplayData *)moduleData).playerModels + (* (struct GameplayData *)moduleData).playerCount )).materials[0],
+				&( (* (struct GameplayData *)moduleData).playerModels[ (* (struct GameplayData *)moduleData).playerCount ].materials[0] ),
 				MAP_DIFFUSE,
-				*( (* (struct GameplayData *)moduleData).playerTex + (* (struct GameplayData *)moduleData).playerCount ) );
+				(* (struct GameplayData *)moduleData).playerTex[ (* (struct GameplayData *)moduleData).playerCount ] );
 				
-				( (* (struct GameplayData *)moduleData).playerCount ) ++;
+				struct Player *newPlayer = (struct Player *)malloc( sizeof(struct Player) );
 				
+				(*newPlayer).node.modelIndex = (* (struct GameplayData *)moduleData).playerCount;
+				(*newPlayer).node.type = PLAYER;
+				(*newPlayer).state = IDLE;
+				(*newPlayer).elapsedTime = 0.0f;
+				(*newPlayer).curFrame = 0;
+				(*newPlayer).node.position = (Vector3){0.0f, 0.1f, 5.0f};
+			
+				(*newPlayer).prev = NULL;
+				(*newPlayer).next = NULL;
+				
+				if (dummy.prev == NULL)
+				{
+					dummy.prev = newPlayer;
+					dummy.next = newPlayer;
+				}
+				else
+				{
+					(*newPlayer).prev = dummy.next;
+					(*dummy.next).next = newPlayer;
+					dummy.next = newPlayer;
+				}
+						
 				char animFilePath[1024];
 				memset(animFilePath, '\0', sizeof(char) * 1024);
 				strcpy(animFilePath, curDir );
@@ -256,56 +279,36 @@ void InitPlayers()
 				
 				int animCount = atoi(buff);
 				
-				struct Player *newPlayer = (struct Player *)malloc( sizeof(struct Player) );
-			
-				(*newPlayer).prev = NULL;
-				(*newPlayer).next = NULL;
-				
-				if (dummy.prev == NULL)
-				{
-					dummy.prev = newPlayer;
-					dummy.next = newPlayer;
-				}
-				else
-				{
-					(*newPlayer).prev = dummy.next;
-					(*dummy.next).next = newPlayer;
-					dummy.next = newPlayer;
-				}
-				
 				(*newPlayer).anims = (struct PlayerAnim *)malloc( sizeof(struct PlayerAnim) * animCount);
-				(*newPlayer).node.modelIndex = ((* (struct GameplayData *)moduleData).playerCount) - 1;
-				(*newPlayer).node.type = PLAYER;
-				(*newPlayer).state = IDLE;
-				(*newPlayer).elapsedTime = 0.0f;
-				(*newPlayer).curFrame = 0;
 				
 				for (int y = 0; y < animCount; y++)
 				{
 					memset(buff, '\0', sizeof(char) * 255);
 					fgets(buff, 255, fp);
-					(* ( (*newPlayer).anims + y) ).startFrame = atoi(buff);
+					(*newPlayer).anims[y].startFrame = atoi(buff);
 
 					memset(buff, '\0', sizeof(char) * 255);
 					fgets(buff, 255, fp);
-					(* ( (*newPlayer).anims + y) ).endFrame = atoi(buff);
+					(*newPlayer).anims[y].endFrame = atoi(buff);
 					
 					memset(buff, '\0', sizeof(char) * 255);
 					fgets(buff, 255, fp);
-					(* ( (*newPlayer).anims + y) ).id = atoi(buff);
+					(*newPlayer).anims[y].id = atoi(buff);
 					
-					if ( (* ( (*newPlayer).anims + y) ).id < MAXANIMSTATES )
+					if ( (*newPlayer).anims[y].id < MAXANIMSTATES )
 					{
-						(*newPlayer).stateAnims[ (* ( (*newPlayer).anims + y) ).id ] = y;
+						(*newPlayer).stateAnims[ (*newPlayer).anims[y].id ] = y;
 					}
 					
 					memset(buff, '\0', sizeof(char) * 255);
 					fgets(buff, 255, fp);
-					(* ( (*newPlayer).anims + y) ).timeInterval = atof(buff);
+					(*newPlayer).anims[y].timeInterval = atof(buff);
 				}
 				
 				fclose(fp);
 				
+				( (* (struct GameplayData *)moduleData).playerCount ) += 1;
+
 			}
 		}
 	}
@@ -356,11 +359,11 @@ void UpdatePlayerState()
 	
 	if ( IsKeyDown(KEY_DOWN) )
 	{
-		(* (struct GameplayData *)moduleData).moveDir.z = -1.0f;
+		(* (struct GameplayData *)moduleData).moveDir.z = 1.0f;
 	}
 	else if ( IsKeyDown(KEY_UP) )
 	{
-		(* (struct GameplayData *)moduleData).moveDir.z = 1.0f;
+		(* (struct GameplayData *)moduleData).moveDir.z = -1.0f;
 	}
 	else
 	{
@@ -378,22 +381,23 @@ void UpdatePlayerState()
 		(* (* (struct GameplayData *)moduleData).curPlayer).elapsedTime = 0.0f;
 		(* (* (struct GameplayData *)moduleData).curPlayer).state = RUN;
 		
-		(* (* (struct GameplayData *)moduleData).curPlayer).curFrame = (* ( (* (* (struct GameplayData *)moduleData).curPlayer).anims + (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ) ).startFrame;
+		(* (* (struct GameplayData *)moduleData).curPlayer).curFrame =
+		(* (* (struct GameplayData *)moduleData).curPlayer).anims[ (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ].startFrame;
 	}
 	else if (updateAnim == false && (* (* (struct GameplayData *)moduleData).curPlayer).state == RUN )
 	{
 		(* (* (struct GameplayData *)moduleData).curPlayer).elapsedTime = 0.0f;
 		(* (* (struct GameplayData *)moduleData).curPlayer).state = IDLE;
 		
-		(* (* (struct GameplayData *)moduleData).curPlayer).curFrame = (* ( (* (* (struct GameplayData *)moduleData).curPlayer).anims + (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ) ).startFrame;
+		(* (* (struct GameplayData *)moduleData).curPlayer).curFrame =
+		(* (* (struct GameplayData *)moduleData).curPlayer).anims[ (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ].startFrame;
 	}
 	
 	if
 	( 
 	
 	(* (* (struct GameplayData *)moduleData).curPlayer).elapsedTime >=
-	(* ( (* (* (struct GameplayData *)moduleData).curPlayer).anims + (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ) ).timeInterval
-	
+	(* (* (struct GameplayData *)moduleData).curPlayer).anims[ (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ].timeInterval
 	)
 	{
 		(* (* (struct GameplayData *)moduleData).curPlayer).elapsedTime = 0.0f;
@@ -403,23 +407,23 @@ void UpdatePlayerState()
 		(
 		
 		(* (* (struct GameplayData *)moduleData).curPlayer).curFrame >
-		(* ( (* (* (struct GameplayData *)moduleData).curPlayer).anims + (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ) ).endFrame
-		
+		(* (* (struct GameplayData *)moduleData).curPlayer).anims[ (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ].endFrame
 		)
 		{
-			(* (* (struct GameplayData *)moduleData).curPlayer).curFrame = (* ( (* (* (struct GameplayData *)moduleData).curPlayer).anims + (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ) ).startFrame;
+			(* (* (struct GameplayData *)moduleData).curPlayer).curFrame =
+			(* (* (struct GameplayData *)moduleData).curPlayer).anims[ (* (* (struct GameplayData *)moduleData).curPlayer).stateAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).state ] ].startFrame;
 		}
 	}
 	
 	UpdateModelAnimation(
-	(* (struct GameplayData *)moduleData).playerModels[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex],
+	(* (struct GameplayData *)moduleData).playerModels[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex ],
 	*( (* (struct GameplayData *)moduleData).playerAnims[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex ] ),
 	(* (* (struct GameplayData *)moduleData).curPlayer).curFrame);
 }
 
 void DrawPlayer()
 {
-	DrawModel( (* (struct GameplayData *)moduleData).playerModels[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex], (* (* (struct GameplayData *)moduleData).curPlayer).node.position, 1.0f, WHITE);
+	DrawModel( (* (struct GameplayData *)moduleData).playerModels[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex ], (* (* (struct GameplayData *)moduleData).curPlayer).node.position, 1.0f, WHITE);
 }
 
 void CheckTileCollision()
@@ -451,28 +455,38 @@ void CheckTileCollision()
 }
 
 void MovePlayer()//TODO: figure out why player/model sometimes doesn't load.
-{
+{//TODO: forward projection collision detection to prevent tunneling.
 	CheckTileCollision();
 	
-	Model *model = &( (* (struct GameplayData *)moduleData).playerModels[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex] );
+	float zDir = ( (* (struct GameplayData *)moduleData).moveDir.z);
 	
+	Model *model = &( (* (struct GameplayData *)moduleData).playerModels[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex ] );
+	
+	//translate model to world position
 	Matrix translation = MatrixTranslate( 
 	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.x,
 	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.y,
 	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.z );
 	
+	//rotate model to angle
 	Matrix rotation = MatrixRotateXYZ( (Vector3){0.0f, (* (struct GameplayData *)moduleData).playerRotAngle, 0.0f} );
+	Quaternion playerRot = QuaternionFromMatrix( rotation );
+	
 	Matrix transform = MatrixMultiply(rotation, translation);
 	
 	(*model).transform = transform;
 	
+	//move player
 	if ( (* (struct GameplayData *)moduleData).moveDir.z != 0.0f )
 	{
+		//get backward direction and negate for forward direction.
 		Vector3 forwardDir = (Vector3){transform.m8, transform.m9, transform.m10};
 		forwardDir = Vector3Negate(forwardDir);
 		
-		Vector3 offset = Vector3Scale(forwardDir, ( (* (struct GameplayData *)moduleData).moveDir.z) * 0.1f);
+		//scale forward direction by movement step and set direction by input
+		Vector3 offset = Vector3Scale(forwardDir, zDir * 0.1f);
 		
+		//add the offset to the world position to get the new position
 		offset = Vector3Add(offset, (* (* (struct GameplayData *)moduleData).curPlayer).node.position);
 		
 		(* (* (struct GameplayData *)moduleData).curPlayer).node.position = offset;
@@ -482,7 +496,107 @@ void MovePlayer()//TODO: figure out why player/model sometimes doesn't load.
 		(*model).transform = MatrixMultiply(rotation, translation);
 	}
 	
+	//raycast for normal alignment.
+	RayHitInfo buildingDownHit, floorDownHit;
+	Ray rayTest;
+	Vector3 buildingHitNormal, floorHitNormal, hitNormal, hitPos;
+	bool buildingHit = true;
+	bool floorHit = true;
 	
+	//raise raycast point to above ground.
+	Vector3 upVec = (Vector3){ (*model).transform.m4, (*model).transform.m5, (*model).transform.m6 };
+	upVec = Vector3Scale( upVec, 2.0f );
+	rayTest.position = Vector3Add( (* (* (struct GameplayData *)moduleData).curPlayer).node.position, upVec);
+	
+	DrawSphere(rayTest.position, 0.1f, GREEN);
+	
+	//down
+	rayTest.direction.x = -( (*model).transform.m4 );
+	rayTest.direction.y = -( (*model).transform.m5 );
+	rayTest.direction.z = -( (*model).transform.m6 );
+	
+	Matrix rot = MatrixIdentity();
+	Matrix trans = MatrixTranslate(
+	(* (* (* (struct GameplayData *)moduleData).curTile).building).position.x,
+	(* (* (* (struct GameplayData *)moduleData).curTile).building).position.y,
+	(* (* (* (struct GameplayData *)moduleData).curTile).building).position.z);
+
+	(* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ].transform = MatrixMultiply(rot,trans);
+	
+	buildingDownHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ] );
+	
+	trans = MatrixTranslate(
+	(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.x,
+	(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.y,
+	(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.z);
+	(* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ].transform = MatrixMultiply(rot,trans);
+	
+	floorDownHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ] );
+	
+	//clamp the range of the raycast
+	if ( buildingDownHit.distance > RAYMAXDIST )
+	{
+		buildingDownHit.hit = false;
+	}
+	
+	if ( floorDownHit.distance > RAYMAXDIST )
+	{
+		floorDownHit.hit = false;
+	}
+	
+	//check if building hit
+	if ( buildingDownHit.hit == true )
+	{
+		buildingHitNormal = buildingDownHit.normal;
+	}
+	else
+	{
+		buildingHit = false;
+	}
+	
+	//check if floor hit
+	if ( floorDownHit.hit == true )
+	{
+		floorHitNormal = floorDownHit.normal;
+	}
+	else
+	{
+		floorHit = false;
+	}
+	
+	if ( buildingHit )
+	{
+		hitNormal = buildingHitNormal;
+		
+		hitPos = buildingDownHit.position;
+	}
+	else if ( floorHit )
+	{
+		hitNormal = floorHitNormal;
+		
+		hitPos = floorDownHit.position;
+	}
+	else
+	{
+		//not touching anything. not facing anything.  dafuq, jumping maybe?
+	}
+	
+	//todo flowers.
+
+	//successful hit, set model rotation to normal direction.
+	if ( buildingHit || floorHit )
+	{
+		Quaternion hitRot = QuaternionFromEuler(hitNormal.x, hitNormal.y, hitNormal.z);
+		
+		playerRot = QuaternionMultiply( hitRot, playerRot );
+		rotation = QuaternionToMatrix(playerRot);
+		
+		translation = MatrixTranslate(hitPos.x, hitPos.y, hitPos.z);
+		transform = MatrixMultiply(rotation, translation);
+		(*model).transform = transform;
+		
+		(* (* (struct GameplayData *)moduleData).curPlayer).node.position = hitPos;
+	}
 }
 
 void GameplayInit()
@@ -514,6 +628,7 @@ void GameplayInit()
 	
 	(*data).playerListStart = NULL;
 	(*data).playerListEnd = NULL;
+	(*data).curPlayer = NULL;
 	InitPlayers();
 	
 	(*data).moveDir.x = 0.0f;(*data).moveDir.y = 0.0f;(*data).moveDir.z = 0.0f;
@@ -565,13 +680,16 @@ void GameplayLoop()
 {
 	UpdateEditorCamera(&drawNodesCam);
 	UpdatePlayerState();
-	MovePlayer();
+	//MovePlayer();
 	
 	BeginDrawing();
 	
 	BeginMode3D(drawNodesCam);
 
 	ClearBackground(RAYWHITE);
+	
+	//temp for debugging:
+	MovePlayer();
 	
 	DrawTiles();
 	

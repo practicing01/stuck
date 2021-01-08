@@ -15,6 +15,7 @@
 #define MAXANIMSTATES 2
 #define ROTMINCLAMP 180.0f
 #define ROTMAXCLAMP -180.0f
+#define RAYMAXDIST 4.0f
 
 enum NodeType {BUILDING, PROP, COLLECTABLE, NPC, PLAYER, FLOOR};
 enum PlayerState {IDLE, RUN};
