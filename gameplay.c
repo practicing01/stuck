@@ -462,7 +462,7 @@ void CheckTileCollision()
 	//
 }
 
-void MovePlayer()//TODO: figure out why player/model sometimes doesn't load.
+void MovePlayer()
 {//TODO: forward projection collision detection to prevent tunneling.
 	CheckTileCollision();
 	
@@ -482,17 +482,19 @@ void MovePlayer()//TODO: figure out why player/model sometimes doesn't load.
 	Matrix rotation = MatrixRotateXYZ( (Vector3){0.0f, (* (struct GameplayData *)moduleData).playerRotAngle, 0.0f} );
 	Quaternion playerRot = QuaternionFromMatrix( rotation );
 	
+	//TODO: translation is supposed to be on the left. fix.
 	Matrix transform = MatrixMultiply(rotation, translation);
+	//Matrix transform = MatrixMultiply(translation, rotation);
 	
 	(*model).transform = transform;
-	
-	//get backward direction and negate for forward direction.
-	Vector3 forwardDir = (Vector3){transform.m8, transform.m9, transform.m10};
-	forwardDir = Vector3Negate(forwardDir);
 	
 	//move player
 	if ( (* (struct GameplayData *)moduleData).moveDir.z != 0.0f )
 	{
+		//get backward direction and negate for forward direction.
+		Vector3 forwardDir = (Vector3){transform.m8, transform.m9, transform.m10};
+		forwardDir = Vector3Negate(forwardDir);
+	
 		//scale forward direction by movement step and set direction by input
 		Vector3 offset = Vector3Scale(forwardDir, (zDir * PLAYERSPEED) * dt.deltaTime);
 		
@@ -519,7 +521,7 @@ void MovePlayer()//TODO: figure out why player/model sometimes doesn't load.
 		
 		//debug
 		DrawSphere(rayTest.position, 0.1f, YELLOW);
-		Vector3 sphereProj = Vector3Negate ( Vector3Scale( upVec, 1.5f ) );
+		Vector3 sphereProj = Vector3Negate ( Vector3Scale( upVec, RAYMAXDIST ) );
 		Vector3 spherePos = Vector3Add( rayTest.position, sphereProj);
 		DrawSphere(spherePos, 0.1f, GREEN);
 		
@@ -528,7 +530,7 @@ void MovePlayer()//TODO: figure out why player/model sometimes doesn't load.
 		rayTest.direction.y = -( (*model).transform.m5 );
 		rayTest.direction.z = -( (*model).transform.m6 );
 		
-		Matrix rot = MatrixIdentity();
+		Matrix rot = MatrixRotateXYZ( (Vector3){0.0f, 0.0f, 0.0f} );
 		Matrix trans = MatrixTranslate(
 		(* (* (* (struct GameplayData *)moduleData).curTile).building).position.x,
 		(* (* (* (struct GameplayData *)moduleData).curTile).building).position.y,
@@ -552,7 +554,7 @@ void MovePlayer()//TODO: figure out why player/model sometimes doesn't load.
 		floorForwardHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ] );
 		
 		//debug
-		sphereProj = Vector3Negate ( Vector3Scale( forwardDir, 1.5f ) );
+		sphereProj = Vector3Negate ( Vector3Scale( forwardDir, RAYMAXDIST ) );
 		spherePos = Vector3Add( rayTest.position, sphereProj);
 		DrawSphere(spherePos, 0.1f, BLUE);
 		
@@ -580,11 +582,11 @@ void MovePlayer()//TODO: figure out why player/model sometimes doesn't load.
 		//check if building hit
 		if ( buildingDownHit.hit == true && buildingForwardHit.hit == true)
 		{
-			//buildingHitNormal = Vector3Lerp( buildingDownHit.normal, buildingForwardHit.normal, 0.5f);
-			//buildingHitPos = Vector3Lerp( buildingDownHit.position, buildingForwardHit.position, 0.5f);
+			buildingHitNormal = Vector3Lerp( buildingDownHit.normal, buildingForwardHit.normal, 0.5f);
+			buildingHitPos = Vector3Lerp( buildingDownHit.position, buildingForwardHit.position, 0.5f);
 			
-			buildingHitNormal = Vector3Scale( Vector3Add( buildingDownHit.normal, buildingForwardHit.normal ), 0.5f );
-			buildingHitPos = Vector3Scale( Vector3Add( buildingDownHit.position, buildingForwardHit.position ), 0.5f );
+			//buildingHitNormal = Vector3Scale( Vector3Add( buildingDownHit.normal, buildingForwardHit.normal ), 0.5f );
+			//buildingHitPos = Vector3Scale( Vector3Add( buildingDownHit.position, buildingForwardHit.position ), 0.5f );
 			
 			buildingHitNormal = Vector3Normalize( buildingHitNormal );
 			
@@ -612,11 +614,11 @@ void MovePlayer()//TODO: figure out why player/model sometimes doesn't load.
 		//check if floor hit
 		if ( floorDownHit.hit == true && floorForwardHit.hit == true )
 		{
-			//floorHitNormal = Vector3Lerp( floorDownHit.normal, floorForwardHit.normal, 0.5f);
-			//floorHitPos = Vector3Lerp( floorDownHit.position, floorForwardHit.position, 0.5f);
+			floorHitNormal = Vector3Lerp( floorDownHit.normal, floorForwardHit.normal, 0.5f);
+			floorHitPos = Vector3Lerp( floorDownHit.position, floorForwardHit.position, 0.5f);
 			
-			floorHitNormal = Vector3Scale( Vector3Add( floorDownHit.normal, floorForwardHit.normal ), 0.5f );
-			floorHitPos = Vector3Scale( Vector3Add( floorDownHit.position, floorForwardHit.position ), 0.5f );
+			//floorHitNormal = Vector3Scale( Vector3Add( floorDownHit.normal, floorForwardHit.normal ), 0.5f );
+			//floorHitPos = Vector3Scale( Vector3Add( floorDownHit.position, floorForwardHit.position ), 0.5f );
 			
 			floorHitNormal = Vector3Normalize( floorHitNormal );
 			
@@ -644,11 +646,11 @@ void MovePlayer()//TODO: figure out why player/model sometimes doesn't load.
 		//check if both hit
 		if ( buildingHit && floorHit )
 		{
-			//hitNormal = Vector3Lerp( buildingHitNormal, floorHitNormal, 0.5f);
-			//hitPos = Vector3Lerp( buildingHitPos, floorHitPos, 0.5f);
+			hitNormal = Vector3Lerp( buildingHitNormal, floorHitNormal, 0.5f);
+			hitPos = Vector3Lerp( buildingHitPos, floorHitPos, 0.5f);
 			
-			hitNormal = Vector3Scale( Vector3Add( buildingHitNormal, floorHitNormal ), 0.5f );
-			hitPos = Vector3Scale( Vector3Add( buildingHitPos, floorHitPos ), 0.5f );
+			//hitNormal = Vector3Scale( Vector3Add( buildingHitNormal, floorHitNormal ), 0.5f );
+			//hitPos = Vector3Scale( Vector3Add( buildingHitPos, floorHitPos ), 0.5f );
 			
 			hitNormal = Vector3Normalize( hitNormal );
 			
@@ -680,14 +682,14 @@ void MovePlayer()//TODO: figure out why player/model sometimes doesn't load.
 		//successful hit, set model rotation to normal direction.
 		if ( buildingHit || floorHit )
 		{
-			Quaternion hitRot = QuaternionFromEuler(hitNormal.x, hitNormal.y, hitNormal.z);
-			
-			playerRot = QuaternionMultiply( hitRot, playerRot );
-			rotation = QuaternionToMatrix(playerRot);
+			Vector3 res = Vector3CrossProduct( (Vector3){0.0f, 1.0f, 0.0f}, hitNormal );
+			Vector3 axis = Vector3Normalize( res );
+			float angle = asin( Vector3Length( res ) );
+			Matrix hitM = MatrixRotate( axis, angle );
+			rotation = MatrixMultiply( rotation, hitM );
 			
 			translation = MatrixTranslate(hitPos.x, hitPos.y, hitPos.z);
-			transform = MatrixMultiply(rotation, translation);
-			(*model).transform = transform;
+			(*model).transform = MatrixMultiply(rotation, translation);//TODO: FIX.  translation is supposed to be on the left.  may have to redo forward/backward logic.
 			
 			(* (* (struct GameplayData *)moduleData).curPlayer).node.position = hitPos;
 			
