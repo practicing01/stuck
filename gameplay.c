@@ -16,13 +16,16 @@ void DrawTiles()
 		
 	while (curNode != NULL)
 	{
+		Matrix rotation = MatrixRotateXYZ( Vector3Zero() );
 		Matrix translation = MatrixTranslate( 
 		(* (*curNode).floor).position.x,
 		(* (*curNode).floor).position.y,
 		(* (*curNode).floor).position.z );
 		
-		(* (struct GameplayData *)moduleData).floorModels[ (* (*curNode).floor).modelIndex ].transform = translation;
-		(* (struct GameplayData *)moduleData).buildingModels[ (* (*curNode).building).modelIndex ].transform = translation;
+		Matrix transform = MatrixMultiply( rotation, translation );
+		
+		(* (struct GameplayData *)moduleData).floorModels[ (* (*curNode).floor).modelIndex ].transform = transform;
+		(* (struct GameplayData *)moduleData).buildingModels[ (* (*curNode).building).modelIndex ].transform = transform;
 		
 		DrawModel( (* (struct GameplayData *)moduleData).floorModels[ (* (*curNode).floor).modelIndex ], (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
 		DrawModel( (* (struct GameplayData *)moduleData).buildingModels[ (* (*curNode).building).modelIndex ], (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
@@ -330,6 +333,11 @@ void InitPlayers()
 
 void ClampPlayerRot(float *rot)
 {
+	if (*rot > PI*2)
+	{
+		*rot -= PI*2;
+	}
+	return;
 	if ( *rot < ROTMAXCLAMP * DEG2RAD )
 	{
 		*rot = ROTMINCLAMP * DEG2RAD;
@@ -348,17 +356,17 @@ void UpdatePlayerState()
 	{
 		(* (struct GameplayData *)moduleData).moveDir.x = -1.0f;
 		
-		(* (struct GameplayData *)moduleData).playerRotAngle -= 5.0f * dt.deltaTime;
+		(* (struct GameplayData *)moduleData).playerRotAngle -= ROTSPEED * dt.deltaTime;
 		
-		ClampPlayerRot( &( (* (struct GameplayData *)moduleData).playerRotAngle ) );
+		//ClampPlayerRot( &( (* (struct GameplayData *)moduleData).playerRotAngle ) );
 	}
 	else if ( IsKeyDown(KEY_RIGHT) )
 	{
 		(* (struct GameplayData *)moduleData).moveDir.x = 1.0f;
 		
-		(* (struct GameplayData *)moduleData).playerRotAngle += 5.0f * dt.deltaTime;
+		(* (struct GameplayData *)moduleData).playerRotAngle += ROTSPEED * dt.deltaTime;
 		
-		ClampPlayerRot( &( (* (struct GameplayData *)moduleData).playerRotAngle ) );
+		//ClampPlayerRot( &( (* (struct GameplayData *)moduleData).playerRotAngle ) );
 	}
 	else
 	{
@@ -477,14 +485,12 @@ void MovePlayer()
 	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.x,
 	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.y,
 	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.z );
-	
+		
 	//rotate model to angle
-	Matrix rotation = MatrixRotateXYZ( (Vector3){0.0f, (* (struct GameplayData *)moduleData).playerRotAngle, 0.0f} );
-	Quaternion playerRot = QuaternionFromMatrix( rotation );
+	Matrix rotation = MatrixRotateXYZ( (Vector3){0.0f, DEG2RAD * ( (* (struct GameplayData *)moduleData).playerRotAngle ), 0.0f} );
+	//TODO: store rotation of hit and apply here
 	
-	//TODO: translation is supposed to be on the left. fix.
 	Matrix transform = MatrixMultiply(rotation, translation);
-	//Matrix transform = MatrixMultiply(translation, rotation);
 	
 	(*model).transform = transform;
 	
@@ -523,7 +529,7 @@ void MovePlayer()
 		DrawSphere(rayTest.position, 0.1f, YELLOW);
 		Vector3 sphereProj = Vector3Negate ( Vector3Scale( upVec, RAYMAXDIST ) );
 		Vector3 spherePos = Vector3Add( rayTest.position, sphereProj);
-		DrawSphere(spherePos, 0.1f, GREEN);
+		DrawSphere(spherePos, 0.2f, GREEN);
 		
 		//down
 		rayTest.direction.x = -( (*model).transform.m4 );
@@ -544,6 +550,7 @@ void MovePlayer()
 		(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.x,
 		(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.y,
 		(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.z);
+		
 		(* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ].transform = MatrixMultiply(rot,trans);
 		
 		floorDownHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ] );
@@ -556,7 +563,7 @@ void MovePlayer()
 		//debug
 		sphereProj = Vector3Negate ( Vector3Scale( forwardDir, RAYMAXDIST ) );
 		spherePos = Vector3Add( rayTest.position, sphereProj);
-		DrawSphere(spherePos, 0.1f, BLUE);
+		DrawSphere(spherePos, 0.2f, BLUE);
 		
 		//clamp the range of the raycast
 		if ( buildingDownHit.distance > RAYMAXDIST )
@@ -590,21 +597,21 @@ void MovePlayer()
 			
 			buildingHitNormal = Vector3Normalize( buildingHitNormal );
 			
-			DrawSphere(buildingHitPos, 0.1f, PINK);
+			DrawSphere(buildingHitPos, 0.2f, PINK);
 		}
 		else if ( buildingDownHit.hit == true )
 		{
 			buildingHitNormal = buildingDownHit.normal;
 			buildingHitPos = buildingDownHit.position;
 			
-			DrawSphere(buildingHitPos, 0.1f, PINK);
+			DrawSphere(buildingHitPos, 0.2f, PINK);
 		}
 		else if ( buildingForwardHit.hit == true )
 		{
 			buildingHitNormal = buildingForwardHit.normal;
 			buildingHitPos = buildingForwardHit.position;
 			
-			DrawSphere(buildingHitPos, 0.1f, PINK);
+			DrawSphere(buildingHitPos, 0.2f, PINK);
 		}
 		else
 		{
@@ -622,21 +629,21 @@ void MovePlayer()
 			
 			floorHitNormal = Vector3Normalize( floorHitNormal );
 			
-			DrawSphere(floorHitPos, 0.1f, PINK);
+			DrawSphere(floorHitPos, 0.2f, PINK);
 		}
 		else if ( floorDownHit.hit == true )
 		{
 			floorHitNormal = floorDownHit.normal;
 			floorHitPos = floorDownHit.position;
 			
-			DrawSphere(floorHitPos, 0.1f, PINK);
+			DrawSphere(floorHitPos, 0.2f, PINK);
 		}
 		else if ( floorForwardHit.hit == true )
 		{
 			floorHitNormal = floorForwardHit.normal;
 			floorHitPos = floorForwardHit.position;
 			
-			DrawSphere(floorHitPos, 0.1f, PINK);
+			DrawSphere(floorHitPos, 0.2f, PINK);
 		}
 		else
 		{
@@ -654,7 +661,7 @@ void MovePlayer()
 			
 			hitNormal = Vector3Normalize( hitNormal );
 			
-			DrawSphere(hitPos, 0.1f, PINK);
+			DrawSphere(hitPos, 0.2f, PINK);
 		}
 		else if ( buildingHit )
 		{
@@ -662,7 +669,7 @@ void MovePlayer()
 			
 			hitPos = buildingHitPos;
 			
-			DrawSphere(hitPos, 0.1f, PINK);
+			DrawSphere(hitPos, 0.2f, PINK);
 		}
 		else if ( floorHit )
 		{
@@ -670,7 +677,7 @@ void MovePlayer()
 			
 			hitPos = floorHitPos;
 			
-			DrawSphere(hitPos, 0.1f, PINK);
+			DrawSphere(hitPos, 0.2f, PINK);
 		}
 		else
 		{
@@ -682,18 +689,18 @@ void MovePlayer()
 		//successful hit, set model rotation to normal direction.
 		if ( buildingHit || floorHit )
 		{
-			Vector3 res = Vector3CrossProduct( (Vector3){0.0f, 1.0f, 0.0f}, hitNormal );
-			Vector3 axis = Vector3Normalize( res );
-			float angle = asin( Vector3Length( res ) );
+			Vector3 cross = Vector3CrossProduct( (Vector3){0.0f, 1.0f, 0.0f}, hitNormal );
+			Vector3 axis = Vector3Normalize( cross );
+			float angle = asinf( Vector3Length( cross ) );
 			Matrix hitM = MatrixRotate( axis, angle );
 			rotation = MatrixMultiply( rotation, hitM );
 			
 			translation = MatrixTranslate(hitPos.x, hitPos.y, hitPos.z);
-			(*model).transform = MatrixMultiply(rotation, translation);//TODO: FIX.  translation is supposed to be on the left.  may have to redo forward/backward logic.
+			(*model).transform = MatrixMultiply(rotation, translation);
 			
 			(* (* (struct GameplayData *)moduleData).curPlayer).node.position = hitPos;
 			
-			DrawSphere(hitPos, 0.1f, PINK);
+			DrawSphere(hitPos, 0.2f, PINK);
 		}
 	
 	}

@@ -17,6 +17,7 @@
 #define ROTMAXCLAMP -180.0f
 #define RAYMAXDIST 4.0f
 #define PLAYERSPEED 5.0f
+#define ROTSPEED 180.0f
 
 enum NodeType {BUILDING, PROP, COLLECTABLE, NPC, PLAYER, FLOOR};
 enum PlayerState {IDLE, RUN};
