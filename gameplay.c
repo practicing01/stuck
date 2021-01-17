@@ -63,9 +63,9 @@ void InitTiles()
 	dummy.prev = NULL;
 	dummy.next = NULL;
 	
-	for (int y = -1; y <= 1; y++)
+	for (int y = 0; y <= 0; y++)//for (int y = -1; y <= 1; y++)
 	{
-		for (int x = -1; x <= 1; x++)
+		for (int x = 0; x <= 0; x++)//for (int x = -1; x <= 1; x++)
 		{
 			struct Tile *newTile = (struct Tile *)malloc( sizeof(struct Tile) );
 			
@@ -102,7 +102,12 @@ void InitTiles()
 			(* (*newTile).building).position = (*newTile).position;
 			(* (*newTile).building).type = BUILDING;
 			(* (*newTile).building).modelIndex = GetRandomValue(0, MAXBUILDINGS - 1);
+			
+			//debug
+			break;
 		}
+		//debug
+		break;
 	}
 	
 	(* (struct GameplayData *)moduleData).tileListStart = dummy.prev;
@@ -258,6 +263,7 @@ void InitPlayers()
 				(*newPlayer).elapsedTime = 0.0f;
 				(*newPlayer).curFrame = 0;
 				(*newPlayer).node.position = (Vector3){0.0f, 0.1f, 5.0f};
+				(*newPlayer).prevRot = MatrixRotateXYZ( Vector3Zero() );
 			
 				(*newPlayer).prev = NULL;
 				(*newPlayer).next = NULL;
@@ -470,10 +476,43 @@ void CheckTileCollision()
 	//
 }
 
+void DebugDrawNormals(Model *model)
+{
+	for (int m = 0; m < (*model).meshCount; m++)
+    {
+        if ( (*model).meshes[m].normals != NULL)
+        {
+			for (int i = 0, v = 0; i < (*model).meshes[m].vertexCount; i++, v += 3)
+			{
+				Vector3 vertex;
+				Vector3 normal;
+				
+				vertex.x = (*model).meshes[m].vertices[v];
+				vertex.y = (*model).meshes[m].vertices[v + 1];
+				vertex.z = (*model).meshes[m].vertices[v + 2];
+				
+				normal.x = (*model).meshes[m].normals[v];
+				normal.y = (*model).meshes[m].normals[v + 1];
+				normal.z = (*model).meshes[m].normals[v + 2];
+				
+				vertex = Vector3Transform(vertex, (*model).transform);
+				normal = Vector3Transform(normal, (*model).transform);
+				
+				Vector3 offset = Vector3Scale( normal, 0.5f );
+				offset = Vector3Add( vertex, offset );
+                DrawLine3D(vertex, offset, GREEN);
+			}
+        }
+    }
+}
+
 void MovePlayer()
 {//TODO: forward projection collision detection to prevent tunneling.
-	CheckTileCollision();
+	Vector3 normalEnd, offset;
 	
+	CheckTileCollision();
+	DebugDrawNormals( &( (* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ] ) );
+
 	bool applyGrav = false;
 	
 	float zDir = ( (* (struct GameplayData *)moduleData).moveDir.z);
@@ -485,22 +524,24 @@ void MovePlayer()
 	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.x,
 	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.y,
 	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.z );
-		
+	
 	//rotate model to angle
 	Matrix rotation = MatrixRotateXYZ( (Vector3){0.0f, DEG2RAD * ( (* (struct GameplayData *)moduleData).playerRotAngle ), 0.0f} );
-	//TODO: store rotation of hit and apply here
+	
+	//reapply previous hit rotation
+	rotation = MatrixMultiply( rotation, (* (* (struct GameplayData *)moduleData).curPlayer).prevRot );
 	
 	Matrix transform = MatrixMultiply(rotation, translation);
 	
 	(*model).transform = transform;
 	
+	//get backward direction and negate for forward direction.
+	Vector3 forwardDir = (Vector3){transform.m8, transform.m9, transform.m10};
+	//forwardDir = Vector3Negate(forwardDir);
+	
 	//move player
 	if ( (* (struct GameplayData *)moduleData).moveDir.z != 0.0f )
-	{
-		//get backward direction and negate for forward direction.
-		Vector3 forwardDir = (Vector3){transform.m8, transform.m9, transform.m10};
-		forwardDir = Vector3Negate(forwardDir);
-	
+	{	
 		//scale forward direction by movement step and set direction by input
 		Vector3 offset = Vector3Scale(forwardDir, (zDir * PLAYERSPEED) * dt.deltaTime);
 		
@@ -512,202 +553,257 @@ void MovePlayer()
 		translation = MatrixTranslate( offset.x, offset.y, offset.z );
 		
 		(*model).transform = MatrixMultiply(rotation, translation);
+	}
 	
-		//raycast for normal alignment.
-		RayHitInfo buildingDownHit, floorDownHit, buildingForwardHit, floorForwardHit;
-		Ray rayTest;
-		Vector3 buildingHitNormal, floorHitNormal, hitNormal, buildingHitPos, floorHitPos, hitPos;
-		bool buildingHit = true;
-		bool floorHit = true;
+	//raycast for normal alignment.
+	RayHitInfo buildingDownHit, floorDownHit, buildingForwardHit, floorForwardHit;
+	Ray rayTest;
+	Vector3 buildingHitNormal, floorHitNormal, hitNormal, buildingHitPos, floorHitPos, hitPos;
+	bool buildingHit = true;
+	bool floorHit = true;
+	
+	//raise raycast point to above ground.
+	Vector3 upVec = (Vector3){ (*model).transform.m4, (*model).transform.m5, (*model).transform.m6 };
+	rayTest.direction = Vector3Negate( upVec );
+	upVec = Vector3Scale( upVec, 1.0f );
+	rayTest.position = Vector3Add( (* (* (struct GameplayData *)moduleData).curPlayer).node.position, upVec);
+	
+	//debug
+	offset = Vector3Scale( rayTest.direction, RAYMAXDIST );
+	normalEnd = Vector3Add( rayTest.position, offset );
+	DrawLine3D(rayTest.position, normalEnd, GREEN);
+	
+	//Matrix rot = MatrixRotateXYZ( (Vector3){0.0f, 0.0f, 0.0f} );
+	Matrix rot = MatrixIdentity();
+	Matrix trans = MatrixTranslate(
+	(* (* (* (struct GameplayData *)moduleData).curTile).building).position.x,
+	(* (* (* (struct GameplayData *)moduleData).curTile).building).position.y,
+	(* (* (* (struct GameplayData *)moduleData).curTile).building).position.z);
+
+	(* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ].transform = MatrixMultiply(rot,trans);
+	
+	buildingDownHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ] );
+	
+	trans = MatrixTranslate(
+	(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.x,
+	(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.y,
+	(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.z);
+	
+	(* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ].transform = MatrixMultiply(rot,trans);
+	
+	floorDownHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ] );
+	
+	//forward
+	upVec = Vector3Scale( upVec, 1.0f );
+	rayTest.position = Vector3Add( (* (* (struct GameplayData *)moduleData).curPlayer).node.position, upVec);
+	rayTest.direction = Vector3Negate( forwardDir );
+	
+	buildingForwardHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ] );
+	floorForwardHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ] );
+	
+	//debug
+	offset = Vector3Scale( rayTest.direction, RAYMAXDIST );
+	normalEnd = Vector3Add( rayTest.position, offset );
+	DrawLine3D(rayTest.position, normalEnd, BLUE);
+	//DrawSphere(rayTest.position, 0.2f, PINK);
+	
+	//clamp the range of the raycast
+	if ( buildingDownHit.distance > RAYMAXDIST )
+	{
+		buildingDownHit.hit = false;
+	}
+	
+	if ( floorDownHit.distance > RAYMAXDIST )
+	{
+		floorDownHit.hit = false;
+	}
+	
+	if ( buildingForwardHit.distance > RAYMAXDIST )
+	{
+		buildingForwardHit.hit = false;
+	}
+	
+	if ( floorForwardHit.distance > RAYMAXDIST )
+	{
+		floorForwardHit.hit = false;
+	}
+	
+	
+	//check if building hit
+	if ( buildingDownHit.hit == true && buildingForwardHit.hit == true)
+	{
+		//buildingHitNormal = Vector3Lerp( buildingDownHit.normal, buildingForwardHit.normal, 0.5f);
+		//buildingHitPos = Vector3Lerp( buildingDownHit.position, buildingForwardHit.position, 0.5f);
 		
-		//raise raycast point to above ground.
-		Vector3 upVec = (Vector3){ (*model).transform.m4, (*model).transform.m5, (*model).transform.m6 };
-		upVec = Vector3Scale( upVec, 1.0f );
-		rayTest.position = Vector3Add( (* (* (struct GameplayData *)moduleData).curPlayer).node.position, upVec);
+		//prioritize walls
+		buildingHitNormal = buildingForwardHit.normal;
+		buildingHitPos = buildingForwardHit.position;
+		
+		//DrawSphere(buildingHitPos, 0.2f, PINK);
+		offset = Vector3Scale( buildingHitNormal, RAYMAXDIST );
+		normalEnd = Vector3Add( buildingHitPos, offset );
+		//DrawLine3D(buildingHitPos, normalEnd, WHITE);
+	}
+	else if ( buildingDownHit.hit == true )
+	{
+		buildingHitNormal = buildingDownHit.normal;
+		buildingHitPos = buildingDownHit.position;
+		
+		//DrawSphere(buildingHitPos, 0.2f, PINK);
+		offset = Vector3Scale( buildingHitNormal, RAYMAXDIST );
+		normalEnd = Vector3Add( buildingHitPos, offset );
+		//DrawLine3D(buildingHitPos, normalEnd, WHITE);
+	}
+	else if ( buildingForwardHit.hit == true )
+	{
+		buildingHitNormal = buildingForwardHit.normal;
+		buildingHitPos = buildingForwardHit.position;
+		
+		//DrawSphere(buildingHitPos, 0.2f, PINK);
+		offset = Vector3Scale( buildingHitNormal, RAYMAXDIST );
+		normalEnd = Vector3Add( buildingHitPos, offset );
+		//DrawLine3D(buildingHitPos, normalEnd, WHITE);
+	}
+	else
+	{
+		buildingHit = false;
+	}
+	
+	//check if floor hit
+	if ( floorDownHit.hit == true && floorForwardHit.hit == true )
+	{
+		//floorHitNormal = Vector3Lerp( floorDownHit.normal, floorForwardHit.normal, 0.5f);
+		//floorHitPos = Vector3Lerp( floorDownHit.position, floorForwardHit.position, 0.5f);
+		
+		//prioritize walls
+		floorHitNormal = floorForwardHit.normal;
+		floorHitPos = floorForwardHit.position;
+		
+		//DrawSphere(floorHitPos, 0.2f, PINK);
+		offset = Vector3Scale( floorHitNormal, RAYMAXDIST );
+		normalEnd = Vector3Add( floorHitPos, offset );
+		//DrawLine3D(floorHitPos, normalEnd, WHITE);
+	}
+	else if ( floorDownHit.hit == true )
+	{
+		floorHitNormal = floorDownHit.normal;
+		floorHitPos = floorDownHit.position;
+		
+		//DrawSphere(floorHitPos, 0.2f, PINK);
+		offset = Vector3Scale( floorHitNormal, RAYMAXDIST );
+		normalEnd = Vector3Add( floorHitPos, offset );
+		//DrawLine3D(floorHitPos, normalEnd, WHITE);
+	}
+	else if ( floorForwardHit.hit == true )
+	{
+		floorHitNormal = floorForwardHit.normal;
+		floorHitPos = floorForwardHit.position;
+		
+		//DrawSphere(floorHitPos, 0.2f, PINK);
+		offset = Vector3Scale( floorHitNormal, RAYMAXDIST );
+		normalEnd = Vector3Add( floorHitPos, offset );
+		//DrawLine3D(floorHitPos, normalEnd, WHITE);
+	}
+	else
+	{
+		floorHit = false;
+	}
+	
+	//check if both hit
+	if ( buildingHit && floorHit )
+	{
+		hitNormal = Vector3Lerp( buildingHitNormal, floorHitNormal, 0.5f);
+		hitPos = Vector3Lerp( buildingHitPos, floorHitPos, 0.5f);
+		
+		//prioritize buildings
+		//hitNormal = buildingHitNormal;
+		//hitPos = buildingHitPos;
+		
+		//DrawSphere(hitPos, 0.2f, PINK);
+		offset = Vector3Scale( hitNormal, RAYMAXDIST );
+		normalEnd = Vector3Add( hitPos, offset );
+
+		//DrawLine3D(hitPos, normalEnd, ORANGE);
+	}
+	else if ( buildingHit )
+	{
+		hitNormal = buildingHitNormal;
+		
+		hitPos = buildingHitPos;
+		
+		//DrawSphere(hitPos, 0.2f, PINK);
+		offset = Vector3Scale( hitNormal, RAYMAXDIST );
+		normalEnd = Vector3Add( hitPos, offset );
+		normalEnd = Vector3Scale( normalEnd, RAYMAXDIST );
+		
+		//DrawLine3D(hitPos, normalEnd, ORANGE);
+	}
+	else if ( floorHit )
+	{
+		hitNormal = floorHitNormal;
+		
+		hitPos = floorHitPos;
+		
+		//DrawSphere(hitPos, 0.2f, PINK);
+		offset = Vector3Scale( hitNormal, RAYMAXDIST );
+		normalEnd = Vector3Add( hitPos, offset );
+		normalEnd = Vector3Scale( normalEnd, RAYMAXDIST );
+
+		//DrawLine3D(hitPos, normalEnd, ORANGE);
+	}
+	else
+	{
+		applyGrav = true;
+	}
+	
+	//todo flowers.
+
+	//successful hit, set model rotation to normal direction.
+	if ( buildingHit || floorHit )
+	{
+		Vector3 cross = Vector3CrossProduct( (Vector3){0.0f, 1.0f, 0.0f}, hitNormal );
+		Vector3 axis = Vector3Normalize( cross );
+		float angle = asinf( Vector3Length( cross ) );
+		Matrix hitM = MatrixRotate( axis, angle );
+		rotation = MatrixRotateXYZ( (Vector3){0.0f, DEG2RAD * ( (* (struct GameplayData *)moduleData).playerRotAngle ), 0.0f} );
+		rotation = MatrixMultiply( rotation, hitM );
+		
+		translation = MatrixTranslate(hitPos.x, hitPos.y, hitPos.z);
+		(*model).transform = MatrixMultiply(rotation, translation);
+		
+		(* (* (struct GameplayData *)moduleData).curPlayer).node.position = hitPos;
+		(* (* (struct GameplayData *)moduleData).curPlayer).prevRot = hitM;
 		
 		//debug
-		DrawSphere(rayTest.position, 0.1f, YELLOW);
-		Vector3 sphereProj = Vector3Negate ( Vector3Scale( upVec, RAYMAXDIST ) );
-		Vector3 spherePos = Vector3Add( rayTest.position, sphereProj);
-		DrawSphere(spherePos, 0.2f, GREEN);
-		
-		//down
-		rayTest.direction.x = -( (*model).transform.m4 );
-		rayTest.direction.y = -( (*model).transform.m5 );
-		rayTest.direction.z = -( (*model).transform.m6 );
-		
-		Matrix rot = MatrixRotateXYZ( (Vector3){0.0f, 0.0f, 0.0f} );
-		Matrix trans = MatrixTranslate(
-		(* (* (* (struct GameplayData *)moduleData).curTile).building).position.x,
-		(* (* (* (struct GameplayData *)moduleData).curTile).building).position.y,
-		(* (* (* (struct GameplayData *)moduleData).curTile).building).position.z);
-
-		(* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ].transform = MatrixMultiply(rot,trans);
-		
-		buildingDownHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ] );
-		
-		trans = MatrixTranslate(
-		(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.x,
-		(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.y,
-		(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.z);
-		
-		(* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ].transform = MatrixMultiply(rot,trans);
-		
-		floorDownHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ] );
-		
-		//forward
-		rayTest.direction = Vector3Negate( forwardDir );
-		buildingForwardHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ] );
-		floorForwardHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ] );
-		
-		//debug
-		sphereProj = Vector3Negate ( Vector3Scale( forwardDir, RAYMAXDIST ) );
-		spherePos = Vector3Add( rayTest.position, sphereProj);
-		DrawSphere(spherePos, 0.2f, BLUE);
-		
-		//clamp the range of the raycast
-		if ( buildingDownHit.distance > RAYMAXDIST )
-		{
-			buildingDownHit.hit = false;
-		}
-		
-		if ( floorDownHit.distance > RAYMAXDIST )
-		{
-			floorDownHit.hit = false;
-		}
-		
-		if ( buildingForwardHit.distance > RAYMAXDIST )
-		{
-			buildingForwardHit.hit = false;
-		}
-		
-		if ( floorForwardHit.distance > RAYMAXDIST )
-		{
-			floorForwardHit.hit = false;
-		}
-		
-		//check if building hit
-		if ( buildingDownHit.hit == true && buildingForwardHit.hit == true)
-		{
-			buildingHitNormal = Vector3Lerp( buildingDownHit.normal, buildingForwardHit.normal, 0.5f);
-			buildingHitPos = Vector3Lerp( buildingDownHit.position, buildingForwardHit.position, 0.5f);
-			
-			//buildingHitNormal = Vector3Scale( Vector3Add( buildingDownHit.normal, buildingForwardHit.normal ), 0.5f );
-			//buildingHitPos = Vector3Scale( Vector3Add( buildingDownHit.position, buildingForwardHit.position ), 0.5f );
-			
-			buildingHitNormal = Vector3Normalize( buildingHitNormal );
-			
-			DrawSphere(buildingHitPos, 0.2f, PINK);
-		}
-		else if ( buildingDownHit.hit == true )
-		{
-			buildingHitNormal = buildingDownHit.normal;
-			buildingHitPos = buildingDownHit.position;
-			
-			DrawSphere(buildingHitPos, 0.2f, PINK);
-		}
-		else if ( buildingForwardHit.hit == true )
-		{
-			buildingHitNormal = buildingForwardHit.normal;
-			buildingHitPos = buildingForwardHit.position;
-			
-			DrawSphere(buildingHitPos, 0.2f, PINK);
-		}
-		else
-		{
-			buildingHit = false;
-		}
-		
-		//check if floor hit
-		if ( floorDownHit.hit == true && floorForwardHit.hit == true )
-		{
-			floorHitNormal = Vector3Lerp( floorDownHit.normal, floorForwardHit.normal, 0.5f);
-			floorHitPos = Vector3Lerp( floorDownHit.position, floorForwardHit.position, 0.5f);
-			
-			//floorHitNormal = Vector3Scale( Vector3Add( floorDownHit.normal, floorForwardHit.normal ), 0.5f );
-			//floorHitPos = Vector3Scale( Vector3Add( floorDownHit.position, floorForwardHit.position ), 0.5f );
-			
-			floorHitNormal = Vector3Normalize( floorHitNormal );
-			
-			DrawSphere(floorHitPos, 0.2f, PINK);
-		}
-		else if ( floorDownHit.hit == true )
-		{
-			floorHitNormal = floorDownHit.normal;
-			floorHitPos = floorDownHit.position;
-			
-			DrawSphere(floorHitPos, 0.2f, PINK);
-		}
-		else if ( floorForwardHit.hit == true )
-		{
-			floorHitNormal = floorForwardHit.normal;
-			floorHitPos = floorForwardHit.position;
-			
-			DrawSphere(floorHitPos, 0.2f, PINK);
-		}
-		else
-		{
-			floorHit = false;
-		}
-		
-		//check if both hit
-		if ( buildingHit && floorHit )
-		{
-			hitNormal = Vector3Lerp( buildingHitNormal, floorHitNormal, 0.5f);
-			hitPos = Vector3Lerp( buildingHitPos, floorHitPos, 0.5f);
-			
-			//hitNormal = Vector3Scale( Vector3Add( buildingHitNormal, floorHitNormal ), 0.5f );
-			//hitPos = Vector3Scale( Vector3Add( buildingHitPos, floorHitPos ), 0.5f );
-			
-			hitNormal = Vector3Normalize( hitNormal );
-			
-			DrawSphere(hitPos, 0.2f, PINK);
-		}
-		else if ( buildingHit )
-		{
-			hitNormal = buildingHitNormal;
-			
-			hitPos = buildingHitPos;
-			
-			DrawSphere(hitPos, 0.2f, PINK);
-		}
-		else if ( floorHit )
-		{
-			hitNormal = floorHitNormal;
-			
-			hitPos = floorHitPos;
-			
-			DrawSphere(hitPos, 0.2f, PINK);
-		}
-		else
-		{
-			applyGrav = true;
-		}
-		
-		//todo flowers.
-
-		//successful hit, set model rotation to normal direction.
-		if ( buildingHit || floorHit )
-		{
-			Vector3 cross = Vector3CrossProduct( (Vector3){0.0f, 1.0f, 0.0f}, hitNormal );
-			Vector3 axis = Vector3Normalize( cross );
-			float angle = asinf( Vector3Length( cross ) );
-			Matrix hitM = MatrixRotate( axis, angle );
-			rotation = MatrixMultiply( rotation, hitM );
-			
-			translation = MatrixTranslate(hitPos.x, hitPos.y, hitPos.z);
-			(*model).transform = MatrixMultiply(rotation, translation);
-			
-			(* (* (struct GameplayData *)moduleData).curPlayer).node.position = hitPos;
-			
-			DrawSphere(hitPos, 0.2f, PINK);
-		}
-	
+		offset = Vector3Scale( hitNormal, RAYMAXDIST );
+		normalEnd = Vector3Add( hitPos, offset );
+		DrawLine3D(hitPos, normalEnd, PURPLE);
 	}
 	
 	if (applyGrav)
-	{
-		//
+	{//TODO: gradual rotation back to 0;
+		//Vector3 downVec = (Vector3){ ( (*model).transform.m4 ), ( (*model).transform.m5 ), ( (*model).transform.m6 ) };
+		Vector3 downVec = (Vector3){0.0f, 1.0f, 0.0f};
+		offset = Vector3Scale(downVec, GRAVITY * dt.deltaTime);
+		(* (* (struct GameplayData *)moduleData).curPlayer).node.position = Vector3Add( (* (* (struct GameplayData *)moduleData).curPlayer).node.position, offset );
+		
+		translation = MatrixTranslate( 
+		(* (* (struct GameplayData *)moduleData).curPlayer).node.position.x,
+		(* (* (struct GameplayData *)moduleData).curPlayer).node.position.y,
+		(* (* (struct GameplayData *)moduleData).curPlayer).node.position.z );
+		
+		rotation = MatrixRotateXYZ( (Vector3){0.0f, DEG2RAD * ( (* (struct GameplayData *)moduleData).playerRotAngle ), 0.0f} );
+		
+		if ( (* (* (struct GameplayData *)moduleData).curPlayer).node.position.y < 0.0f )//clamp to ground
+		{
+			(* (* (struct GameplayData *)moduleData).curPlayer).node.position.y = 0.0f;
+			
+			(* (* (struct GameplayData *)moduleData).curPlayer).prevRot = MatrixRotateXYZ( (Vector3){0.0f, 0.0f, 0.0f} );
+		}
+		
+		rotation = MatrixMultiply( rotation, (* (* (struct GameplayData *)moduleData).curPlayer).prevRot );
+		
+		(*model).transform = MatrixMultiply(rotation, translation);
 	}
 }
 

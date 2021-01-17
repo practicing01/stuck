@@ -5,7 +5,7 @@
 #include "moduleLoop.h"
 #include "stuck.h"
 
-#define MAXBUILDINGS 4
+#define MAXBUILDINGS 5
 #define MAXFLOORS 1
 #define MAXPLAYERS 1
 #define MAXPROPS 8
@@ -15,9 +15,10 @@
 #define MAXANIMSTATES 2
 #define ROTMINCLAMP 180.0f
 #define ROTMAXCLAMP -180.0f
-#define RAYMAXDIST 4.0f
+#define RAYMAXDIST 2.0f
 #define PLAYERSPEED 5.0f
 #define ROTSPEED 180.0f
+#define GRAVITY -1.0f
 
 enum NodeType {BUILDING, PROP, COLLECTABLE, NPC, PLAYER, FLOOR};
 enum PlayerState {IDLE, RUN};
@@ -74,6 +75,7 @@ struct Player
 	float elapsedTime;
 	struct PlayerAnim *anims;
 	int stateAnims[MAXANIMSTATES];
+	Matrix prevRot;
 	
 	struct Player *prev, *next;
 };
@@ -105,6 +107,7 @@ struct GameplayData
 	Camera3D camera;
 };
 
+void DebugDrawNormals(Model *model);
 void ClampPlayerRot(float *rot);
 void DrawPlayer();
 void MovePlayer();
