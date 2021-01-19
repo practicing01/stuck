@@ -116,7 +116,7 @@ void InitTiles()
 	//TraceLog(LOG_INFO, "inited tiles");
 }
 
-void PopulateModelCache(char *curDir, Model *models, int *modelCount, int maxCount)
+void PopulateModelCache(char *curDir, Model *models, Texture2D *textures, int *modelCount, int maxCount)
 {
 	(*modelCount) = 0;
 	memset(models, '\0', sizeof(Model) * maxCount);
@@ -143,7 +143,7 @@ void PopulateModelCache(char *curDir, Model *models, int *modelCount, int maxCou
 		}
 		else//not a directory
 		{
-			if (FileExists(filePath) && IsFileExtension(files[x], ".glb"))
+			if (FileExists(filePath) && IsFileExtension(files[x], ".obj"))
 			{
 				if ( (*modelCount) >= maxCount )
 				{
@@ -155,6 +155,20 @@ void PopulateModelCache(char *curDir, Model *models, int *modelCount, int maxCou
 				//TraceLog(LOG_INFO, files[x]);
 								
 				*(models + (*modelCount) ) = LoadModel( filePath );
+				
+				char texFilePath[1024];
+				memset(texFilePath, '\0', sizeof(char) * 1024);
+				strcpy(texFilePath, curDir );
+				strcat(texFilePath, "/");
+				strcat(texFilePath, GetFileNameWithoutExt(files[x]) );
+				strcat(texFilePath, ".png");
+				
+				*(textures + (*modelCount) ) = LoadTexture( texFilePath );
+				
+				SetMaterialTexture(
+				&( ( *(models + (*modelCount) ) ).materials[0] ),
+				MAP_DIFFUSE,
+				*(textures + (*modelCount) ) );
 				
 				(*modelCount)++;
 			}
@@ -565,15 +579,14 @@ void MovePlayer()
 	//raise raycast point to above ground.
 	Vector3 upVec = (Vector3){ (*model).transform.m4, (*model).transform.m5, (*model).transform.m6 };
 	rayTest.direction = Vector3Negate( upVec );
-	upVec = Vector3Scale( upVec, 1.0f );
+	upVec = Vector3Scale( upVec, 0.5f );
 	rayTest.position = Vector3Add( (* (* (struct GameplayData *)moduleData).curPlayer).node.position, upVec);
 	
 	//debug
-	offset = Vector3Scale( rayTest.direction, RAYMAXDIST );
+	offset = Vector3Scale( rayTest.direction, DOWNRAYMAXDIST );
 	normalEnd = Vector3Add( rayTest.position, offset );
 	DrawLine3D(rayTest.position, normalEnd, GREEN);
 	
-	//Matrix rot = MatrixRotateXYZ( (Vector3){0.0f, 0.0f, 0.0f} );
 	Matrix rot = MatrixIdentity();
 	Matrix trans = MatrixTranslate(
 	(* (* (* (struct GameplayData *)moduleData).curTile).building).position.x,
@@ -602,28 +615,30 @@ void MovePlayer()
 	floorForwardHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ] );
 	
 	//debug
-	offset = Vector3Scale( rayTest.direction, RAYMAXDIST );
+	offset = Vector3Scale( rayTest.direction, FORWARDRAYMAXDIST );
 	normalEnd = Vector3Add( rayTest.position, offset );
 	DrawLine3D(rayTest.position, normalEnd, BLUE);
 	//DrawSphere(rayTest.position, 0.2f, PINK);
 	
+	//TODO: upcast
+	
 	//clamp the range of the raycast
-	if ( buildingDownHit.distance > RAYMAXDIST )
+	if ( buildingDownHit.distance > DOWNRAYMAXDIST )
 	{
 		buildingDownHit.hit = false;
 	}
 	
-	if ( floorDownHit.distance > RAYMAXDIST )
+	if ( floorDownHit.distance > DOWNRAYMAXDIST )
 	{
 		floorDownHit.hit = false;
 	}
 	
-	if ( buildingForwardHit.distance > RAYMAXDIST )
+	if ( buildingForwardHit.distance > FORWARDRAYMAXDIST )
 	{
 		buildingForwardHit.hit = false;
 	}
 	
-	if ( floorForwardHit.distance > RAYMAXDIST )
+	if ( floorForwardHit.distance > FORWARDRAYMAXDIST )
 	{
 		floorForwardHit.hit = false;
 	}
@@ -638,31 +653,16 @@ void MovePlayer()
 		//prioritize walls
 		buildingHitNormal = buildingForwardHit.normal;
 		buildingHitPos = buildingForwardHit.position;
-		
-		//DrawSphere(buildingHitPos, 0.2f, PINK);
-		offset = Vector3Scale( buildingHitNormal, RAYMAXDIST );
-		normalEnd = Vector3Add( buildingHitPos, offset );
-		//DrawLine3D(buildingHitPos, normalEnd, WHITE);
 	}
 	else if ( buildingDownHit.hit == true )
 	{
 		buildingHitNormal = buildingDownHit.normal;
 		buildingHitPos = buildingDownHit.position;
-		
-		//DrawSphere(buildingHitPos, 0.2f, PINK);
-		offset = Vector3Scale( buildingHitNormal, RAYMAXDIST );
-		normalEnd = Vector3Add( buildingHitPos, offset );
-		//DrawLine3D(buildingHitPos, normalEnd, WHITE);
 	}
 	else if ( buildingForwardHit.hit == true )
 	{
 		buildingHitNormal = buildingForwardHit.normal;
 		buildingHitPos = buildingForwardHit.position;
-		
-		//DrawSphere(buildingHitPos, 0.2f, PINK);
-		offset = Vector3Scale( buildingHitNormal, RAYMAXDIST );
-		normalEnd = Vector3Add( buildingHitPos, offset );
-		//DrawLine3D(buildingHitPos, normalEnd, WHITE);
 	}
 	else
 	{
@@ -678,31 +678,16 @@ void MovePlayer()
 		//prioritize walls
 		floorHitNormal = floorForwardHit.normal;
 		floorHitPos = floorForwardHit.position;
-		
-		//DrawSphere(floorHitPos, 0.2f, PINK);
-		offset = Vector3Scale( floorHitNormal, RAYMAXDIST );
-		normalEnd = Vector3Add( floorHitPos, offset );
-		//DrawLine3D(floorHitPos, normalEnd, WHITE);
 	}
 	else if ( floorDownHit.hit == true )
 	{
 		floorHitNormal = floorDownHit.normal;
 		floorHitPos = floorDownHit.position;
-		
-		//DrawSphere(floorHitPos, 0.2f, PINK);
-		offset = Vector3Scale( floorHitNormal, RAYMAXDIST );
-		normalEnd = Vector3Add( floorHitPos, offset );
-		//DrawLine3D(floorHitPos, normalEnd, WHITE);
 	}
 	else if ( floorForwardHit.hit == true )
 	{
 		floorHitNormal = floorForwardHit.normal;
 		floorHitPos = floorForwardHit.position;
-		
-		//DrawSphere(floorHitPos, 0.2f, PINK);
-		offset = Vector3Scale( floorHitNormal, RAYMAXDIST );
-		normalEnd = Vector3Add( floorHitPos, offset );
-		//DrawLine3D(floorHitPos, normalEnd, WHITE);
 	}
 	else
 	{
@@ -718,38 +703,18 @@ void MovePlayer()
 		//prioritize buildings
 		//hitNormal = buildingHitNormal;
 		//hitPos = buildingHitPos;
-		
-		//DrawSphere(hitPos, 0.2f, PINK);
-		offset = Vector3Scale( hitNormal, RAYMAXDIST );
-		normalEnd = Vector3Add( hitPos, offset );
-
-		//DrawLine3D(hitPos, normalEnd, ORANGE);
 	}
 	else if ( buildingHit )
 	{
 		hitNormal = buildingHitNormal;
 		
 		hitPos = buildingHitPos;
-		
-		//DrawSphere(hitPos, 0.2f, PINK);
-		offset = Vector3Scale( hitNormal, RAYMAXDIST );
-		normalEnd = Vector3Add( hitPos, offset );
-		normalEnd = Vector3Scale( normalEnd, RAYMAXDIST );
-		
-		//DrawLine3D(hitPos, normalEnd, ORANGE);
 	}
 	else if ( floorHit )
 	{
 		hitNormal = floorHitNormal;
 		
 		hitPos = floorHitPos;
-		
-		//DrawSphere(hitPos, 0.2f, PINK);
-		offset = Vector3Scale( hitNormal, RAYMAXDIST );
-		normalEnd = Vector3Add( hitPos, offset );
-		normalEnd = Vector3Scale( normalEnd, RAYMAXDIST );
-
-		//DrawLine3D(hitPos, normalEnd, ORANGE);
 	}
 	else
 	{
@@ -775,7 +740,7 @@ void MovePlayer()
 		(* (* (struct GameplayData *)moduleData).curPlayer).prevRot = hitM;
 		
 		//debug
-		offset = Vector3Scale( hitNormal, RAYMAXDIST );
+		offset = Vector3Scale( hitNormal, DOWNRAYMAXDIST );
 		normalEnd = Vector3Add( hitPos, offset );
 		DrawLine3D(hitPos, normalEnd, PURPLE);
 	}
@@ -823,12 +788,12 @@ void GameplayInit()
 	memset(curDir, '\0', sizeof(char) * 1024);
 	strcpy(curDir, workDir );
 	strcat(curDir, "/art/gfx/buildings");
-	PopulateModelCache(curDir, (*data).buildingModels, &( (*data).buildingCount ), MAXBUILDINGS);
+	PopulateModelCache(curDir, (*data).buildingModels, (*data).buildingTex, &( (*data).buildingCount ), MAXBUILDINGS);
 	
 	memset(curDir, '\0', sizeof(char) * 1024);
 	strcpy(curDir, workDir );
 	strcat(curDir, "/art/gfx/floors");
-	PopulateModelCache(curDir, (*data).floorModels, &( (*data).floorCount ), MAXFLOORS);
+	PopulateModelCache(curDir, (*data).floorModels, (*data).floorTex, &( (*data).floorCount ), MAXFLOORS);
 	
 	(*data).tileListStart = NULL;
 	(*data).tileListEnd = NULL;
@@ -881,6 +846,16 @@ void GameplayExit()
 	for (int x = 0; x < (* (struct GameplayData *)moduleData).playerCount; x++)
 	{
 		UnloadTexture( (* (struct GameplayData *)moduleData).playerTex[x]);
+	}
+	
+	for (int x = 0; x < (* (struct GameplayData *)moduleData).buildingCount; x++)
+	{
+		UnloadTexture( (* (struct GameplayData *)moduleData).buildingTex[x]);
+	}
+	
+	for (int x = 0; x < (* (struct GameplayData *)moduleData).floorCount; x++)
+	{
+		UnloadTexture( (* (struct GameplayData *)moduleData).floorTex[x]);
 	}
 }
 

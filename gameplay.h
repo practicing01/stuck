@@ -15,7 +15,8 @@
 #define MAXANIMSTATES 2
 #define ROTMINCLAMP 180.0f
 #define ROTMAXCLAMP -180.0f
-#define RAYMAXDIST 2.0f
+#define DOWNRAYMAXDIST 1.0f
+#define FORWARDRAYMAXDIST 1.0f
 #define PLAYERSPEED 5.0f
 #define ROTSPEED 180.0f
 #define GRAVITY -1.0f
@@ -87,8 +88,10 @@ struct GameplayData
 	
 	int buildingCount;
 	Model buildingModels[MAXBUILDINGS];
+	Texture2D buildingTex[MAXBUILDINGS];
 	int floorCount;
 	Model floorModels[MAXFLOORS];
+	Texture2D floorTex[MAXFLOORS];
 	int playerCount;
 	Model playerModels[MAXPLAYERS];
 	ModelAnimation *playerAnims[MAXPLAYERS];
@@ -114,7 +117,7 @@ void MovePlayer();
 void UpdatePlayerState();
 void InitPlayers();
 void RemovePlayers();
-void PopulateModelCache(char *curDir, Model *models, int *modelCount, int maxCount);
+void PopulateModelCache(char *curDir, Model *models, Texture2D *textures, int *modelCount, int maxCount);
 void CheckTileCollision();
 void InitTiles();
 void RemoveTiles();
