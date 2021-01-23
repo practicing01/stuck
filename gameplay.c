@@ -620,8 +620,6 @@ void MovePlayer()
 	DrawLine3D(rayTest.position, normalEnd, BLUE);
 	//DrawSphere(rayTest.position, 0.2f, PINK);
 	
-	//TODO: upcast
-	
 	//clamp the range of the raycast
 	if ( buildingDownHit.distance > DOWNRAYMAXDIST )
 	{
@@ -699,10 +697,6 @@ void MovePlayer()
 	{
 		hitNormal = Vector3Lerp( buildingHitNormal, floorHitNormal, 0.5f);
 		hitPos = Vector3Lerp( buildingHitPos, floorHitPos, 0.5f);
-		
-		//prioritize buildings
-		//hitNormal = buildingHitNormal;
-		//hitPos = buildingHitPos;
 	}
 	else if ( buildingHit )
 	{
@@ -725,10 +719,11 @@ void MovePlayer()
 
 	//successful hit, set model rotation to normal direction.
 	if ( buildingHit || floorHit )
-	{
-		Vector3 cross = Vector3CrossProduct( (Vector3){0.0f, 1.0f, 0.0f}, hitNormal );
-		Vector3 axis = Vector3Normalize( cross );
-		float angle = asinf( Vector3Length( cross ) );
+	{	
+		//thanks to Mauricio Cele Lopez Belon and his answer to the question here: https://stackoverflow.com/questions/63212143/calculating-object-rotation-based-on-plane-normal/63255665#63255665
+		Vector3 axis = Vector3Normalize( Vector3CrossProduct( (Vector3){0.0f, 1.0f, 0.0f}, hitNormal ) );
+		float angle = acosf( Vector3DotProduct( (Vector3){0.0f, 1.0f, 0.0f}, hitNormal ) );
+		
 		Matrix hitM = MatrixRotate( axis, angle );
 		rotation = MatrixRotateXYZ( (Vector3){0.0f, DEG2RAD * ( (* (struct GameplayData *)moduleData).playerRotAngle ), 0.0f} );
 		rotation = MatrixMultiply( rotation, hitM );
