@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <math.h>
 #include "raymath.h"
+#define RLIGHTS_IMPLEMENTATION
+#include "rlights.h"
 
 void DrawTiles()
 {
@@ -16,7 +18,7 @@ void DrawTiles()
 		
 	while (curNode != NULL)
 	{
-		Matrix rotation = MatrixRotateXYZ( Vector3Zero() );
+		Matrix rotation = MatrixIdentity();
 		Matrix translation = MatrixTranslate( 
 		(* (*curNode).floor).position.x,
 		(* (*curNode).floor).position.y,
@@ -63,9 +65,9 @@ void InitTiles()
 	dummy.prev = NULL;
 	dummy.next = NULL;
 	
-	for (int y = 0; y <= 0; y++)//for (int y = -1; y <= 1; y++)
+	for (int y = -1; y <= 1; y++)
 	{
-		for (int x = 0; x <= 0; x++)//for (int x = -1; x <= 1; x++)
+		for (int x = -1; x <= 1; x++)
 		{
 			struct Tile *newTile = (struct Tile *)malloc( sizeof(struct Tile) );
 			
@@ -102,18 +104,11 @@ void InitTiles()
 			(* (*newTile).building).position = (*newTile).position;
 			(* (*newTile).building).type = BUILDING;
 			(* (*newTile).building).modelIndex = GetRandomValue(0, MAXBUILDINGS - 1);
-			
-			//debug
-			break;
 		}
-		//debug
-		break;
 	}
 	
 	(* (struct GameplayData *)moduleData).tileListStart = dummy.prev;
 	(* (struct GameplayData *)moduleData).tileListEnd = dummy.next;
-	
-	//TraceLog(LOG_INFO, "inited tiles");
 }
 
 void PopulateModelCache(char *curDir, Model *models, Texture2D *textures, int *modelCount, int maxCount)
@@ -260,6 +255,7 @@ void InitPlayers()
 				strcpy(texFilePath, curDir );
 				strcat(texFilePath, "/");
 				strcat(texFilePath, GetFileNameWithoutExt(files[x]) );
+				//traditional
 				strcat(texFilePath, ".png");
 				
 				(* (struct GameplayData *)moduleData).playerTex[ (* (struct GameplayData *)moduleData).playerCount ] = LoadTexture( texFilePath );
@@ -269,6 +265,15 @@ void InitPlayers()
 				MAP_DIFFUSE,
 				(* (struct GameplayData *)moduleData).playerTex[ (* (struct GameplayData *)moduleData).playerCount ] );
 				
+				//pbr: didn't work or i did something wrong.
+				/*LoadMaterialPBR( &( (* (struct GameplayData *)moduleData).playerModels[ (* (struct GameplayData *)moduleData).playerCount ].materials[0] ), texFilePath );
+				
+				CreateLight(LIGHT_POINT, (Vector3){ LIGHT_DISTANCE, LIGHT_HEIGHT, 0.0f }, (Vector3){ 0.0f, 0.0f, 0.0f }, (Color){ 255, 0, 0, 255 }, (* (struct GameplayData *)moduleData).playerModels[ (* (struct GameplayData *)moduleData).playerCount ].materials[0].shader);
+				CreateLight(LIGHT_POINT, (Vector3){ 0.0f, LIGHT_HEIGHT, LIGHT_DISTANCE }, (Vector3){ 0.0f, 0.0f, 0.0f }, (Color){ 0, 255, 0, 255 }, (* (struct GameplayData *)moduleData).playerModels[ (* (struct GameplayData *)moduleData).playerCount ].materials[0].shader);
+				CreateLight(LIGHT_POINT, (Vector3){ -LIGHT_DISTANCE, LIGHT_HEIGHT, 0.0f }, (Vector3){ 0.0f, 0.0f, 0.0f }, (Color){ 0, 0, 255, 255 }, (* (struct GameplayData *)moduleData).playerModels[ (* (struct GameplayData *)moduleData).playerCount ].materials[0].shader);
+				CreateLight(LIGHT_DIRECTIONAL, (Vector3){ 0.0f, LIGHT_HEIGHT*2.0f, -LIGHT_DISTANCE }, (Vector3){ 0.0f, 0.0f, 0.0f }, (Color){ 255, 0, 255, 255 }, (* (struct GameplayData *)moduleData).playerModels[ (* (struct GameplayData *)moduleData).playerCount ].materials[0].shader);
+				*///
+				
 				struct Player *newPlayer = (struct Player *)malloc( sizeof(struct Player) );
 				
 				(*newPlayer).node.modelIndex = (* (struct GameplayData *)moduleData).playerCount;
@@ -276,7 +281,7 @@ void InitPlayers()
 				(*newPlayer).state = IDLE;
 				(*newPlayer).elapsedTime = 0.0f;
 				(*newPlayer).curFrame = 0;
-				(*newPlayer).node.position = (Vector3){0.0f, 0.1f, 5.0f};
+				(*newPlayer).node.position = (Vector3){0.0f, 0.1f, 10.0f};
 				(*newPlayer).prevRot = MatrixRotateXYZ( Vector3Zero() );
 			
 				(*newPlayer).prev = NULL;
@@ -372,7 +377,7 @@ void UpdatePlayerState()
 {
 	bool updateAnim = false;
 	
-	if ( IsKeyDown(KEY_LEFT) )
+	if ( IsKeyDown(KEY_A) )
 	{
 		(* (struct GameplayData *)moduleData).moveDir.x = -1.0f;
 		
@@ -380,7 +385,7 @@ void UpdatePlayerState()
 		
 		//ClampPlayerRot( &( (* (struct GameplayData *)moduleData).playerRotAngle ) );
 	}
-	else if ( IsKeyDown(KEY_RIGHT) )
+	else if ( IsKeyDown(KEY_D) )
 	{
 		(* (struct GameplayData *)moduleData).moveDir.x = 1.0f;
 		
@@ -393,11 +398,11 @@ void UpdatePlayerState()
 		(* (struct GameplayData *)moduleData).moveDir.x = 0.0f;
 	}
 	
-	if ( IsKeyDown(KEY_DOWN) )
+	if ( IsKeyDown(KEY_S) )
 	{
 		(* (struct GameplayData *)moduleData).moveDir.z = 1.0f;
 	}
-	else if ( IsKeyDown(KEY_UP) )
+	else if ( IsKeyDown(KEY_W) )
 	{
 		(* (struct GameplayData *)moduleData).moveDir.z = -1.0f;
 	}
@@ -487,7 +492,6 @@ void CheckTileCollision()
 	}
 	
 	(* (struct GameplayData *)moduleData).curTile = closestTile;
-	//
 }
 
 void DebugDrawNormals(Model *model)
@@ -525,7 +529,7 @@ void MovePlayer()
 	Vector3 normalEnd, offset;
 	
 	CheckTileCollision();
-	DebugDrawNormals( &( (* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ] ) );
+	//DebugDrawNormals( &( (* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ] ) );
 
 	bool applyGrav = false;
 	
@@ -583,9 +587,9 @@ void MovePlayer()
 	rayTest.position = Vector3Add( (* (* (struct GameplayData *)moduleData).curPlayer).node.position, upVec);
 	
 	//debug
-	offset = Vector3Scale( rayTest.direction, DOWNRAYMAXDIST );
+	/*offset = Vector3Scale( rayTest.direction, DOWNRAYMAXDIST );
 	normalEnd = Vector3Add( rayTest.position, offset );
-	DrawLine3D(rayTest.position, normalEnd, GREEN);
+	DrawLine3D(rayTest.position, normalEnd, GREEN);*/
 	
 	Matrix rot = MatrixIdentity();
 	Matrix trans = MatrixTranslate(
@@ -615,9 +619,9 @@ void MovePlayer()
 	floorForwardHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ] );
 	
 	//debug
-	offset = Vector3Scale( rayTest.direction, FORWARDRAYMAXDIST );
+	/*offset = Vector3Scale( rayTest.direction, FORWARDRAYMAXDIST );
 	normalEnd = Vector3Add( rayTest.position, offset );
-	DrawLine3D(rayTest.position, normalEnd, BLUE);
+	DrawLine3D(rayTest.position, normalEnd, BLUE);*/
 	//DrawSphere(rayTest.position, 0.2f, PINK);
 	
 	//clamp the range of the raycast
@@ -718,11 +722,12 @@ void MovePlayer()
 	//todo flowers.
 
 	//successful hit, set model rotation to normal direction.
-	if ( buildingHit || floorHit )
+	if ( buildingHit || floorHit )//TODO: fix transform NAN when reaching edge of cube. parallel normal & ray maybe.
 	{	
+		Vector3 up = (Vector3){0.0f, 1.0f, 0.0f};
 		//thanks to Mauricio Cele Lopez Belon and his answer to the question here: https://stackoverflow.com/questions/63212143/calculating-object-rotation-based-on-plane-normal/63255665#63255665
-		Vector3 axis = Vector3Normalize( Vector3CrossProduct( (Vector3){0.0f, 1.0f, 0.0f}, hitNormal ) );
-		float angle = acosf( Vector3DotProduct( (Vector3){0.0f, 1.0f, 0.0f}, hitNormal ) );
+		Vector3 axis = Vector3Normalize( Vector3CrossProduct( up, hitNormal ) );
+		float angle = acosf( Vector3DotProduct( up, hitNormal ) );
 		
 		Matrix hitM = MatrixRotate( axis, angle );
 		rotation = MatrixRotateXYZ( (Vector3){0.0f, DEG2RAD * ( (* (struct GameplayData *)moduleData).playerRotAngle ), 0.0f} );
@@ -735,17 +740,30 @@ void MovePlayer()
 		(* (* (struct GameplayData *)moduleData).curPlayer).prevRot = hitM;
 		
 		//debug
-		offset = Vector3Scale( hitNormal, DOWNRAYMAXDIST );
+		/*offset = Vector3Scale( hitNormal, DOWNRAYMAXDIST );
 		normalEnd = Vector3Add( hitPos, offset );
-		DrawLine3D(hitPos, normalEnd, PURPLE);
+		DrawLine3D(hitPos, normalEnd, PURPLE);*/
 	}
 	
 	if (applyGrav)
-	{//TODO: gradual rotation back to 0;
-		//Vector3 downVec = (Vector3){ ( (*model).transform.m4 ), ( (*model).transform.m5 ), ( (*model).transform.m6 ) };
-		Vector3 downVec = (Vector3){0.0f, 1.0f, 0.0f};
+	{
+		Quaternion rotQ = QuaternionFromMatrix( (* (* (struct GameplayData *)moduleData).curPlayer).prevRot );
+		Quaternion upQ = QuaternionFromAxisAngle( (Vector3){1.0f, 0.0f, 0.0f}, 0.0f);
+		Quaternion resultQ = QuaternionNlerp( rotQ, upQ, 0.1f );
+		Matrix result = QuaternionToMatrix( resultQ );
+		(* (* (struct GameplayData *)moduleData).curPlayer).prevRot = result;
+		
+		Vector3 downVec = (Vector3){ ( result.m4 ), ( result.m5 ), ( result.m6 ) };
 		offset = Vector3Scale(downVec, GRAVITY * dt.deltaTime);
+		
 		(* (* (struct GameplayData *)moduleData).curPlayer).node.position = Vector3Add( (* (* (struct GameplayData *)moduleData).curPlayer).node.position, offset );
+		
+		if ( (* (* (struct GameplayData *)moduleData).curPlayer).node.position.y < 0.0f )//clamp to ground
+		{
+			(* (* (struct GameplayData *)moduleData).curPlayer).node.position.y = 0.0f;
+			
+			//(* (* (struct GameplayData *)moduleData).curPlayer).prevRot = MatrixIdentity();
+		}
 		
 		translation = MatrixTranslate( 
 		(* (* (struct GameplayData *)moduleData).curPlayer).node.position.x,
@@ -754,14 +772,7 @@ void MovePlayer()
 		
 		rotation = MatrixRotateXYZ( (Vector3){0.0f, DEG2RAD * ( (* (struct GameplayData *)moduleData).playerRotAngle ), 0.0f} );
 		
-		if ( (* (* (struct GameplayData *)moduleData).curPlayer).node.position.y < 0.0f )//clamp to ground
-		{
-			(* (* (struct GameplayData *)moduleData).curPlayer).node.position.y = 0.0f;
-			
-			(* (* (struct GameplayData *)moduleData).curPlayer).prevRot = MatrixRotateXYZ( (Vector3){0.0f, 0.0f, 0.0f} );
-		}
-		
-		rotation = MatrixMultiply( rotation, (* (* (struct GameplayData *)moduleData).curPlayer).prevRot );
+		rotation = MatrixMultiply( rotation, result );
 		
 		(*model).transform = MatrixMultiply(rotation, translation);
 	}
@@ -808,9 +819,11 @@ void GameplayInit()
     drawNodesCam.fovy = 45.0f;
     drawNodesCam.type = CAMERA_PERSPECTIVE;
     
-    SetCameraModeEditor(drawNodesCam, CAMERA_FIRST_PERSON);
+    //debug camera
+    //SetCameraModeEditor(drawNodesCam, CAMERA_FIRST_PERSON);
+    //SetCameraMoveControls(KEY_W, KEY_S, KEY_D, KEY_A, KEY_E, KEY_Q);
     
-    SetCameraMoveControls(KEY_W, KEY_S, KEY_D, KEY_A, KEY_E, KEY_Q);
+    SetCameraMode( drawNodesCam, CAMERA_THIRD_PERSON );
 }
 
 void GameplayExit()
@@ -830,6 +843,8 @@ void GameplayExit()
 	
 	for (int x = 0; x < (* (struct GameplayData *)moduleData).playerCount; x++)
 	{
+		//pbr
+		//UnloadMaterial( (* (struct GameplayData *)moduleData).playerModels[x].materials[0] );
 		UnloadModel( (* (struct GameplayData *)moduleData).playerModels[x]);
 	}
 	
@@ -856,9 +871,22 @@ void GameplayExit()
 
 void GameplayLoop()
 {
-	UpdateEditorCamera(&drawNodesCam);
+	//debug camera
+	//UpdateEditorCamera(&drawNodesCam);
+	
+	//pbr
+	/*float cameraPos[3] = { drawNodesCam.position.x, drawNodesCam.position.y, drawNodesCam.position.z };
+    SetShaderValue(
+    (* (struct GameplayData *)moduleData).playerModels[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex ].materials[0].shader,
+    (* (struct GameplayData *)moduleData).playerModels[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex ].materials[0].shader.locs[LOC_VECTOR_VIEW],
+    cameraPos,
+    UNIFORM_VEC3);*/
+
 	UpdatePlayerState();
-	//MovePlayer();
+	MovePlayer();
+	
+	drawNodesCam.target = (* (* (struct GameplayData *)moduleData).curPlayer).node.position;
+	UpdateCamera( &drawNodesCam );
 	
 	BeginDrawing();
 	
@@ -866,15 +894,22 @@ void GameplayLoop()
 
 	ClearBackground(RAYWHITE);
 	
-	//temp for debugging:
-	MovePlayer();
+	//temp for debugging drawing:
+	//MovePlayer();
 	
 	DrawTiles();
 	
 	DrawPlayer();
 	
 	EndMode3D();
-
+	
+	//
+	/*DrawText(TextFormat("player pos: %f %f %f",
+	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.x,
+	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.y,
+	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.z),
+	190, 250, 20, YELLOW);*/
+	
 	EndDrawing();
 	
 	if (WindowShouldClose())
@@ -977,3 +1012,149 @@ void UpdateEditorCamera(Camera3D *camera)
 	camera->target.z = camera->position.z - transform.m14;
 }
 //
+
+//pbr
+static void LoadMaterialPBR(Material *mat, char *path)
+{
+	Color albedo = (Color){ 255, 255, 255, 255 };
+	float metalness = 1.0f;
+	float roughness = 1.0f;
+	
+    (*mat) = LoadMaterialDefault();   // Initialize material to default
+
+    // Load PBR shader (requires several maps)
+#if defined(PLATFORM_DESKTOP)
+    (*mat).shader = LoadShader("shaders/glsl330/pbr.vs", "shaders/glsl330/pbr.fs");
+#else   // PLATFORM_RPI, PLATFORM_ANDROID, PLATFORM_WEB
+    (*mat).shader = LoadShader("shaders/glsl100/pbr.vs", "shaders/glsl100/pbr.fs");
+#endif
+
+    // Get required locations points for PBR material
+    // NOTE: Those location names must be available and used in the shader code
+    (*mat).shader.locs[LOC_MAP_ALBEDO] = GetShaderLocation((*mat).shader, "albedo.sampler");
+    (*mat).shader.locs[LOC_MAP_METALNESS] = GetShaderLocation((*mat).shader, "metalness.sampler");
+    (*mat).shader.locs[LOC_MAP_NORMAL] = GetShaderLocation((*mat).shader, "normals.sampler");
+    (*mat).shader.locs[LOC_MAP_ROUGHNESS] = GetShaderLocation((*mat).shader, "roughness.sampler");
+    (*mat).shader.locs[LOC_MAP_OCCLUSION] = GetShaderLocation((*mat).shader, "occlusion.sampler");
+    //(*mat).shader.locs[LOC_MAP_EMISSION] = GetShaderLocation((*mat).shader, "emission.sampler");
+    //(*mat).shader.locs[LOC_MAP_HEIGHT] = GetShaderLocation((*mat).shader, "height.sampler");
+    (*mat).shader.locs[LOC_MAP_IRRADIANCE] = GetShaderLocation((*mat).shader, "irradianceMap");
+    (*mat).shader.locs[LOC_MAP_PREFILTER] = GetShaderLocation((*mat).shader, "prefilterMap");
+    (*mat).shader.locs[LOC_MAP_BRDF] = GetShaderLocation((*mat).shader, "brdfLUT");
+
+    // Set view matrix location
+    (*mat).shader.locs[LOC_MATRIX_MODEL] = GetShaderLocation((*mat).shader, "matModel");
+    //(*mat).shader.locs[LOC_MATRIX_VIEW] = GetShaderLocation((*mat).shader, "view");
+    (*mat).shader.locs[LOC_VECTOR_VIEW] = GetShaderLocation((*mat).shader, "viewPos");
+
+    //MAP_ALBEDO
+    char texFilePath[1024];
+	memset(texFilePath, '\0', sizeof(char) * 1024);
+	strcpy(texFilePath, path );
+	strcat(texFilePath, ".png");
+	(*mat).maps[MAP_ALBEDO].texture = LoadTexture(texFilePath);
+	//MAP_NORMAL
+	memset(texFilePath, '\0', sizeof(char) * 1024);
+	strcpy(texFilePath, path );
+	strcat(texFilePath, "N");
+	strcat(texFilePath, ".png");
+	(*mat).maps[MAP_NORMAL].texture = LoadTexture(texFilePath);
+    //MAP_METALNESS
+	memset(texFilePath, '\0', sizeof(char) * 1024);
+	strcpy(texFilePath, path );
+	strcat(texFilePath, "M");
+	strcat(texFilePath, ".png");
+	(*mat).maps[MAP_METALNESS].texture = LoadTexture(texFilePath);
+    //MAP_ROUGHNESS
+	memset(texFilePath, '\0', sizeof(char) * 1024);
+	strcpy(texFilePath, path );
+	strcat(texFilePath, "R");
+	strcat(texFilePath, ".png");
+	(*mat).maps[MAP_ROUGHNESS].texture = LoadTexture(texFilePath);
+    //MAP_OCCLUSION
+	memset(texFilePath, '\0', sizeof(char) * 1024);
+	strcpy(texFilePath, path );
+	strcat(texFilePath, "O");
+	strcat(texFilePath, ".png");
+	(*mat).maps[MAP_OCCLUSION].texture = LoadTexture(texFilePath);
+    
+    // Set textures filtering for better quality
+    SetTextureFilter((*mat).maps[MAP_ALBEDO].texture, FILTER_BILINEAR);
+    SetTextureFilter((*mat).maps[MAP_NORMAL].texture, FILTER_BILINEAR);
+    SetTextureFilter((*mat).maps[MAP_METALNESS].texture, FILTER_BILINEAR);
+    SetTextureFilter((*mat).maps[MAP_ROUGHNESS].texture, FILTER_BILINEAR);
+    SetTextureFilter((*mat).maps[MAP_OCCLUSION].texture, FILTER_BILINEAR);
+    
+    // Enable sample usage in shader for assigned textures
+    SetShaderValue((*mat).shader, GetShaderLocation((*mat).shader, "albedo.useSampler"), (int[1]){ 1 }, UNIFORM_INT);
+    SetShaderValue((*mat).shader, GetShaderLocation((*mat).shader, "normals.useSampler"), (int[1]){ 1 }, UNIFORM_INT);
+    SetShaderValue((*mat).shader, GetShaderLocation((*mat).shader, "metalness.useSampler"), (int[1]){ 1 }, UNIFORM_INT);
+    SetShaderValue((*mat).shader, GetShaderLocation((*mat).shader, "roughness.useSampler"), (int[1]){ 1 }, UNIFORM_INT);
+    SetShaderValue((*mat).shader, GetShaderLocation((*mat).shader, "occlusion.useSampler"), (int[1]){ 1 }, UNIFORM_INT);
+
+    int renderModeLoc = GetShaderLocation((*mat).shader, "renderMode");
+    SetShaderValue((*mat).shader, renderModeLoc, (int[1]){ 0 }, UNIFORM_INT);
+
+    // Set up material properties color
+    (*mat).maps[MAP_ALBEDO].color = albedo;
+    (*mat).maps[MAP_NORMAL].color = (Color){ 128, 128, 255, 255 };
+    (*mat).maps[MAP_METALNESS].value = metalness;
+    (*mat).maps[MAP_ROUGHNESS].value = roughness;
+    (*mat).maps[MAP_OCCLUSION].value = 1.0f;
+    (*mat).maps[MAP_EMISSION].value = 0.5f;
+    (*mat).maps[MAP_HEIGHT].value = 0.5f;
+    
+    // Generate cubemap from panorama texture
+    //--------------------------------------------------------------------------------------------------------
+    Texture2D panorama = LoadTexture("shaders/dresden_square_1k.hdr");
+    // Load equirectangular to cubemap shader
+#if defined(PLATFORM_DESKTOP)
+    Shader shdrCubemap = LoadShader("shaders/glsl330/cubemap.vs", "shaders/glsl330/cubemap.fs");
+#else   // PLATFORM_RPI, PLATFORM_ANDROID, PLATFORM_WEB
+    Shader shdrCubemap = LoadShader("shaders/glsl100/cubemap.vs", "shaders/glsl100/cubemap.fs");
+#endif
+    SetShaderValue(shdrCubemap, GetShaderLocation(shdrCubemap, "equirectangularMap"), (int[1]){ 0 }, UNIFORM_INT);
+    TextureCubemap cubemap = GenTextureCubemap(shdrCubemap, panorama, CUBEMAP_SIZE, UNCOMPRESSED_R32G32B32);
+    UnloadTexture(panorama);
+    UnloadShader(shdrCubemap);
+    //--------------------------------------------------------------------------------------------------------
+    
+    // Generate irradiance map from cubemap texture
+    //--------------------------------------------------------------------------------------------------------
+    // Load irradiance (GI) calculation shader
+#if defined(PLATFORM_DESKTOP)
+    Shader shdrIrradiance = LoadShader("shaders/glsl330/skybox.vs", "shaders/glsl330/irradiance.fs");
+#else   // PLATFORM_RPI, PLATFORM_ANDROID, PLATFORM_WEB
+    Shader shdrIrradiance = LoadShader("shaders/glsl100/skybox.vs", "shaders/glsl100/irradiance.fs");
+#endif
+    SetShaderValue(shdrIrradiance, GetShaderLocation(shdrIrradiance, "environmentMap"), (int[1]){ 0 }, UNIFORM_INT);
+    (*mat).maps[MAP_IRRADIANCE].texture = GenTextureIrradiance(shdrIrradiance, cubemap, IRRADIANCE_SIZE);
+    UnloadShader(shdrIrradiance);
+    //--------------------------------------------------------------------------------------------------------
+    
+    // Generate prefilter map from cubemap texture
+    //--------------------------------------------------------------------------------------------------------
+    // Load reflection prefilter calculation shader
+#if defined(PLATFORM_DESKTOP)
+    Shader shdrPrefilter = LoadShader("shaders/glsl330/skybox.vs", "shaders/glsl330/prefilter.fs");
+#else
+    Shader shdrPrefilter = LoadShader("shaders/glsl100/skybox.vs", "shaders/glsl100/prefilter.fs");
+#endif
+    SetShaderValue(shdrPrefilter, GetShaderLocation(shdrPrefilter, "environmentMap"), (int[1]){ 0 }, UNIFORM_INT);
+    (*mat).maps[MAP_PREFILTER].texture = GenTexturePrefilter(shdrPrefilter, cubemap, PREFILTERED_SIZE);
+    UnloadTexture(cubemap);
+    UnloadShader(shdrPrefilter);
+    //--------------------------------------------------------------------------------------------------------
+    
+    // Generate BRDF (bidirectional reflectance distribution function) texture (using shader)
+    //--------------------------------------------------------------------------------------------------------
+#if defined(PLATFORM_DESKTOP)
+    Shader shdrBRDF = LoadShader("shaders/glsl330/brdf.vs", "shaders/glsl330/brdf.fs");
+#else
+    Shader shdrBRDF = LoadShader("shaders/glsl100/brdf.vs", "shaders/glsl100/brdf.fs");
+#endif
+    (*mat).maps[MAP_BRDF].texture = GenTextureBRDF(shdrBRDF, BRDF_SIZE);
+    UnloadShader(shdrBRDF);
+    //--------------------------------------------------------------------------------------------------------
+
+}

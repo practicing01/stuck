@@ -5,7 +5,7 @@
 #include "moduleLoop.h"
 #include "stuck.h"
 
-#define MAXBUILDINGS 5
+#define MAXBUILDINGS 4
 #define MAXFLOORS 1
 #define MAXPLAYERS 1
 #define MAXPROPS 8
@@ -20,6 +20,14 @@
 #define PLAYERSPEED 5.0f
 #define ROTSPEED 180.0f
 #define GRAVITY -1.0f
+
+//pbr
+#define CUBEMAP_SIZE        1024        // Cubemap texture size
+#define IRRADIANCE_SIZE       32        // Irradiance texture size
+#define PREFILTERED_SIZE     256        // Prefiltered HDR environment texture size
+#define BRDF_SIZE            512        // BRDF LUT texture size
+static void LoadMaterialPBR(Material *mat, char *path);
+#define PLATFORM_DESKTOP
 
 enum NodeType {BUILDING, PROP, COLLECTABLE, NPC, PLAYER, FLOOR};
 enum PlayerState {IDLE, RUN};
