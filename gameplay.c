@@ -55,6 +55,29 @@ void DrawTiles()
 			}
 		}
 		
+		//draw flowers
+		if ( curNode == (* (struct GameplayData *)moduleData).curTile )
+		{
+			struct Node *curFlower;
+			curFlower = (*curNode).flowerListStart;
+			
+			while (curFlower != NULL)
+			{
+				translation = MatrixTranslate( 
+				(*curFlower).position.x,
+				(*curFlower).position.y,
+				(*curFlower).position.z );
+				
+				transform = MatrixMultiply( rotation, translation );
+				
+				(* (struct GameplayData *)moduleData).flowerModels[ (*curFlower).modelIndex ].transform = transform;
+				
+				DrawModel( (* (struct GameplayData *)moduleData).flowerModels[ (*curFlower).modelIndex ], (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
+				
+				curFlower = (*curFlower).next;
+			}
+		}
+		
 		curNode = (*curNode).next;
 	}
 
@@ -71,6 +94,7 @@ void RemoveTiles()
 		free( (*curNode).floor );
 		free( (*curNode).building );
 		
+		//free props
 		struct Node *curProp;
 		struct Node *nextProp;
 		curProp = (*curNode).propListStart;
@@ -84,6 +108,21 @@ void RemoveTiles()
 			curProp = nextProp;
 		}
 		
+		//free flowers
+		struct Node *curFlower;
+		struct Node *nextFlower;
+		curFlower = (*curNode).flowerListStart;
+		
+		while (curFlower != NULL)
+		{
+			nextFlower = (*curFlower).next;
+		
+			free(curFlower);
+			
+			curFlower = nextFlower;
+		}
+		
+		//free node
 		nextNode = (*curNode).next;
 		
 		free(curNode);
@@ -97,10 +136,14 @@ void RemoveTiles()
 
 void InitTiles()
 {
-	float propDensity = 20.0f;
+	float propDensity = 40.0f;
 	float halfTileSize = TILESIZE * 0.5f;
 	float propInterval = TILESIZE / propDensity;
 	float halfPropInterval = propInterval * 0.5f;
+	
+	float flowerDensity = 10.0f;
+	float flowerInterval = TILESIZE / flowerDensity;
+	float halfFlowerInterval = flowerInterval * 0.5f;
 	
 	struct Tile dummy;
 	dummy.prev = NULL;
@@ -188,6 +231,50 @@ void InitTiles()
 					(*newProp).modelIndex = GetRandomValue(0, MAXPROPS - 1);
 				}
 			}
+			
+			//create flowers
+			struct Node dummyFlower;
+			dummyFlower.prev = NULL;
+			dummyFlower.next = NULL;
+	
+			for (int w = 0; w < flowerDensity; w++)
+			{
+				for (int z = 0; z < flowerDensity; z++)
+				{
+					struct Node *newFlower = (struct Node *)malloc( sizeof(struct Node) );
+			
+					(*newFlower).prev = NULL;
+					(*newFlower).next = NULL;
+					
+					if (dummyFlower.prev == NULL)
+					{
+						dummyFlower.prev = newFlower;
+						dummyFlower.next = newFlower;
+						
+						(*newTile).flowerListStart = newFlower;
+					}
+					else
+					{
+						(*newFlower).prev = dummyFlower.next;
+						(*dummyFlower.next).next = newFlower;
+						dummyFlower.next = newFlower;
+						
+						(*newTile).flowerListEnd = newFlower;
+					}
+					
+					(*newFlower).position.x = ( (*newTile).position.x - halfTileSize ) + ( flowerInterval * (float)z );
+					(*newFlower).position.y = 0.0f;
+					(*newFlower).position.z = ( (*newTile).position.z - halfTileSize ) + ( flowerInterval * (float)w );
+					
+					//randomly offset for variety.
+					(*newFlower).position.x += (float)GetRandomValue(-halfFlowerInterval, halfFlowerInterval);
+					(*newFlower).position.z += (float)GetRandomValue(-halfFlowerInterval, halfFlowerInterval);
+					
+					(*newFlower).type = FLOWER;
+					(*newFlower).modelIndex = GetRandomValue(0, MAXFLOWERS - 1);
+				}
+			}
+			
 		}
 	}
 	
