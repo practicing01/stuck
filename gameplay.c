@@ -32,6 +32,29 @@ void DrawTiles()
 		DrawModel( (* (struct GameplayData *)moduleData).floorModels[ (* (*curNode).floor).modelIndex ], (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
 		DrawModel( (* (struct GameplayData *)moduleData).buildingModels[ (* (*curNode).building).modelIndex ], (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
 		
+		//draw props
+		if ( curNode == (* (struct GameplayData *)moduleData).curTile )
+		{
+			struct Node *curProp;
+			curProp = (*curNode).propListStart;
+			
+			while (curProp != NULL)
+			{
+				translation = MatrixTranslate( 
+				(*curProp).position.x,
+				(*curProp).position.y,
+				(*curProp).position.z );
+				
+				transform = MatrixMultiply( rotation, translation );
+				
+				(* (struct GameplayData *)moduleData).propModels[ (*curProp).modelIndex ].transform = transform;
+				
+				DrawModel( (* (struct GameplayData *)moduleData).propModels[ (*curProp).modelIndex ], (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
+				
+				curProp = (*curProp).next;
+			}
+		}
+		
 		curNode = (*curNode).next;
 	}
 
@@ -48,6 +71,19 @@ void RemoveTiles()
 		free( (*curNode).floor );
 		free( (*curNode).building );
 		
+		struct Node *curProp;
+		struct Node *nextProp;
+		curProp = (*curNode).propListStart;
+		
+		while (curProp != NULL)
+		{
+			nextProp = (*curProp).next;
+		
+			free(curProp);
+			
+			curProp = nextProp;
+		}
+		
 		nextNode = (*curNode).next;
 		
 		free(curNode);
@@ -61,6 +97,11 @@ void RemoveTiles()
 
 void InitTiles()
 {
+	float propDensity = 20.0f;
+	float halfTileSize = TILESIZE * 0.5f;
+	float propInterval = TILESIZE / propDensity;
+	float halfPropInterval = propInterval * 0.5f;
+	
 	struct Tile dummy;
 	dummy.prev = NULL;
 	dummy.next = NULL;
@@ -104,6 +145,49 @@ void InitTiles()
 			(* (*newTile).building).position = (*newTile).position;
 			(* (*newTile).building).type = BUILDING;
 			(* (*newTile).building).modelIndex = GetRandomValue(0, MAXBUILDINGS - 1);
+			
+			//create props
+			struct Node dummyProp;
+			dummyProp.prev = NULL;
+			dummyProp.next = NULL;
+	
+			for (int w = 0; w < propDensity; w++)
+			{
+				for (int z = 0; z < propDensity; z++)
+				{
+					struct Node *newProp = (struct Node *)malloc( sizeof(struct Node) );
+			
+					(*newProp).prev = NULL;
+					(*newProp).next = NULL;
+					
+					if (dummyProp.prev == NULL)
+					{
+						dummyProp.prev = newProp;
+						dummyProp.next = newProp;
+						
+						(*newTile).propListStart = newProp;
+					}
+					else
+					{
+						(*newProp).prev = dummyProp.next;
+						(*dummyProp.next).next = newProp;
+						dummyProp.next = newProp;
+						
+						(*newTile).propListEnd = newProp;
+					}
+					
+					(*newProp).position.x = ( (*newTile).position.x - halfTileSize ) + ( propInterval * (float)z );
+					(*newProp).position.y = 0.0f;
+					(*newProp).position.z = ( (*newTile).position.z - halfTileSize ) + ( propInterval * (float)w );
+					
+					//randomly offset for variety.
+					(*newProp).position.x += (float)GetRandomValue(-halfPropInterval, halfPropInterval);
+					(*newProp).position.z += (float)GetRandomValue(-halfPropInterval, halfPropInterval);
+					
+					(*newProp).type = PROP;
+					(*newProp).modelIndex = GetRandomValue(0, MAXPROPS - 1);
+				}
+			}
 		}
 	}
 	
@@ -801,6 +885,47 @@ void GameplayInit()
 	strcat(curDir, "/art/gfx/floors");
 	PopulateModelCache(curDir, (*data).floorModels, (*data).floorTex, &( (*data).floorCount ), MAXFLOORS);
 	
+	memset(curDir, '\0', sizeof(char) * 1024);
+	strcpy(curDir, workDir );
+	strcat(curDir, "/art/gfx/flowers");
+	PopulateModelCache(curDir, (*data).flowerModels, (*data).flowerTex, &( (*data).flowerCount ), MAXFLOWERS);
+	
+	memset(curDir, '\0', sizeof(char) * 1024);
+	strcpy(curDir, workDir );
+	strcat(curDir, "/art/gfx/props");
+	PopulateModelCache(curDir, (*data).propModels, (*data).propTex, &( (*data).propCount ), MAXPROPS);
+	
+	//special cases:
+	memset(curDir, '\0', sizeof(char) * 1024);
+	strcpy(curDir, workDir );
+	strcat(curDir, "/art/gfx/misc/pollen.obj");
+	(*data).pollenModel = LoadModel( curDir );
+	
+	memset(curDir, '\0', sizeof(char) * 1024);
+	strcpy(curDir, workDir );
+	strcat(curDir, "/art/gfx/misc/pollen.png");
+	(*data).pollenTex = LoadTexture( curDir );
+	
+	memset(curDir, '\0', sizeof(char) * 1024);
+	strcpy(curDir, workDir );
+	strcat(curDir, "/art/gfx/misc/cloud.obj");
+	(*data).cloudModel = LoadModel( curDir );
+	
+	memset(curDir, '\0', sizeof(char) * 1024);
+	strcpy(curDir, workDir );
+	strcat(curDir, "/art/gfx/misc/cloud.png");
+	(*data).cloudTex = LoadTexture( curDir );
+	
+	memset(curDir, '\0', sizeof(char) * 1024);
+	strcpy(curDir, workDir );
+	strcat(curDir, "/art/gfx/misc/droplet.obj");
+	(*data).dropletModel = LoadModel( curDir );
+	
+	memset(curDir, '\0', sizeof(char) * 1024);
+	strcpy(curDir, workDir );
+	strcat(curDir, "/art/gfx/misc/droplet.png");
+	(*data).dropletTex = LoadTexture( curDir );
+	
 	(*data).tileListStart = NULL;
 	(*data).tileListEnd = NULL;
 	InitTiles();
@@ -841,6 +966,16 @@ void GameplayExit()
 		UnloadModel( (* (struct GameplayData *)moduleData).floorModels[x]);
 	}
 	
+	for (int x = 0; x < (* (struct GameplayData *)moduleData).flowerCount; x++)
+	{
+		UnloadModel( (* (struct GameplayData *)moduleData).flowerModels[x]);
+	}
+	
+	for (int x = 0; x < (* (struct GameplayData *)moduleData).propCount; x++)
+	{
+		UnloadModel( (* (struct GameplayData *)moduleData).propModels[x]);
+	}
+	
 	for (int x = 0; x < (* (struct GameplayData *)moduleData).playerCount; x++)
 	{
 		//pbr
@@ -867,6 +1002,24 @@ void GameplayExit()
 	{
 		UnloadTexture( (* (struct GameplayData *)moduleData).floorTex[x]);
 	}
+	
+	for (int x = 0; x < (* (struct GameplayData *)moduleData).flowerCount; x++)
+	{
+		UnloadTexture( (* (struct GameplayData *)moduleData).flowerTex[x]);
+	}
+	
+	for (int x = 0; x < (* (struct GameplayData *)moduleData).propCount; x++)
+	{
+		UnloadTexture( (* (struct GameplayData *)moduleData).propTex[x]);
+	}
+	
+	//special cases
+	UnloadModel( (* (struct GameplayData *)moduleData).pollenModel );
+	UnloadTexture( (* (struct GameplayData *)moduleData).pollenTex );
+	UnloadModel( (* (struct GameplayData *)moduleData).cloudModel );
+	UnloadTexture( (* (struct GameplayData *)moduleData).cloudTex );
+	UnloadModel( (* (struct GameplayData *)moduleData).dropletModel );
+	UnloadTexture( (* (struct GameplayData *)moduleData).dropletTex );
 }
 
 void GameplayLoop()

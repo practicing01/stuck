@@ -8,9 +8,10 @@
 #define MAXBUILDINGS 4
 #define MAXFLOORS 1
 #define MAXPLAYERS 1
-#define MAXPROPS 8
+#define MAXPROPS 5
 #define MAXCOLLECTIBLES 1
-#define MAXNPCS 8
+#define MAXNPCS 1
+#define MAXFLOWERS 1
 #define TILESIZE 200.0f
 #define MAXANIMSTATES 2
 #define ROTMINCLAMP 180.0f
@@ -29,7 +30,7 @@
 static void LoadMaterialPBR(Material *mat, char *path);
 #define PLATFORM_DESKTOP
 
-enum NodeType {BUILDING, PROP, COLLECTABLE, NPC, PLAYER, FLOOR};
+enum NodeType {BUILDING, PROP, FLOWER, NPC, PLAYER, FLOOR, MISC};
 enum PlayerState {IDLE, RUN};
 
 struct Node
@@ -50,16 +51,16 @@ struct Trigger//shift tiles when player is colliding with just one.
 	BoundingBox bounds;
 	bool colliding;
 	Vector3 scale;
-	struct Node *collidersList, *collidersListStart, *collidersListEnd;
+	struct Node *collidersListStart, *collidersListEnd, *curCollider;
 };
 
 struct Tile
 {
 	struct Node *building;
 	struct Node *floor;
-	struct Node *propList, *propListStart, *propListEnd;
-	struct Node *collectibleList, *collectibleListStart, *collectibleListEnd;
-	struct Node *npcList, *npcListStart, *npcListEnd;
+	struct Node *propListStart, *propListEnd, *curProp;
+	struct Node *flowerListStart, *flowerListEnd, *curFlower;
+	struct Node *pollenListStart, *pollenListEnd, *curPollen;
 	struct Trigger trigger;
 	
 	Vector2 offset;
@@ -106,8 +107,10 @@ struct GameplayData
 	Texture2D playerTex[MAXPLAYERS];
 	int propCount;
 	Model propModels[MAXPROPS];
-	int collectibleCount;
-	Model collectibleModels[MAXCOLLECTIBLES];
+	Texture2D propTex[MAXPROPS];
+	int flowerCount;
+	Model flowerModels[MAXFLOWERS];
+	Texture2D flowerTex[MAXFLOWERS];
 	int npcCount;
 	Model npcModels[MAXNPCS];
 	
@@ -116,6 +119,14 @@ struct GameplayData
 	struct Player *playerListStart, *playerListEnd, *curPlayer;
 	
 	Camera3D camera;
+	
+	//special cases
+	Model pollenModel;
+	Texture2D pollenTex;
+	Model cloudModel;
+	Texture2D cloudTex;
+	Model dropletModel;
+	Texture2D dropletTex;
 };
 
 void DebugDrawNormals(Model *model);
