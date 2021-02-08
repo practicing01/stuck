@@ -118,6 +118,8 @@ struct GameplayData
 	
 	struct Player *playerListStart, *playerListEnd, *curPlayer;
 	
+	struct Node *curflower;
+	
 	Camera3D camera;
 	
 	//special cases

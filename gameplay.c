@@ -641,6 +641,7 @@ void DrawPlayer()
 void CheckTileCollision()
 {
 	//temporary debugging code
+	(* (struct GameplayData *)moduleData).curflower = NULL;
 	struct Tile *curNode;
 	struct Tile *nextNode;
 	struct Tile *closestTile;
@@ -663,6 +664,29 @@ void CheckTileCollision()
 	}
 	
 	(* (struct GameplayData *)moduleData).curTile = closestTile;
+	
+	struct Node *curFlower;
+	struct Node *nextFlower;
+	struct Node *closestFlower;
+	curFlower = (*closestTile).flowerListStart;
+	closestFlower = curFlower;
+	
+	dist = Vector3Distance( (* (* (struct GameplayData *)moduleData).curPlayer).node.position, (*curFlower).position );
+		
+	while (curFlower != NULL)
+	{
+		float newDist = Vector3Distance( (* (* (struct GameplayData *)moduleData).curPlayer).node.position, (*curFlower).position );
+		
+		if ( newDist < dist )
+		{
+			dist = newDist;
+			closestFlower = curFlower;
+		}
+				
+		curFlower = (*curFlower).next;
+	}
+	
+	(* (struct GameplayData *)moduleData).curflower = closestFlower;
 }
 
 void DebugDrawNormals(Model *model)
@@ -697,6 +721,7 @@ void DebugDrawNormals(Model *model)
 
 void MovePlayer()
 {//TODO: forward projection collision detection to prevent tunneling.
+	//TODO: use a colliders list instead of hardcoding floor/building/flowers.
 	Vector3 normalEnd, offset;
 	
 	CheckTileCollision();
@@ -745,11 +770,12 @@ void MovePlayer()
 	}
 	
 	//raycast for normal alignment.
-	RayHitInfo buildingDownHit, floorDownHit, buildingForwardHit, floorForwardHit;
+	RayHitInfo buildingDownHit, floorDownHit, buildingForwardHit, floorForwardHit, flowerDownHit, flowerForwardHit;
 	Ray rayTest;
-	Vector3 buildingHitNormal, floorHitNormal, hitNormal, buildingHitPos, floorHitPos, hitPos;
+	Vector3 buildingHitNormal, floorHitNormal, hitNormal, buildingHitPos, floorHitPos, hitPos, flowerHitNormal, flowerHitPos;
 	bool buildingHit = true;
 	bool floorHit = true;
+	bool flowerHit = true;
 	
 	//raise raycast point to above ground.
 	Vector3 upVec = (Vector3){ (*model).transform.m4, (*model).transform.m5, (*model).transform.m6 };
@@ -762,6 +788,7 @@ void MovePlayer()
 	normalEnd = Vector3Add( rayTest.position, offset );
 	DrawLine3D(rayTest.position, normalEnd, GREEN);*/
 	
+	//transform building
 	Matrix rot = MatrixIdentity();
 	Matrix trans = MatrixTranslate(
 	(* (* (* (struct GameplayData *)moduleData).curTile).building).position.x,
@@ -770,8 +797,10 @@ void MovePlayer()
 
 	(* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ].transform = MatrixMultiply(rot,trans);
 	
+	//raycast building
 	buildingDownHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ] );
 	
+	//transform floor
 	trans = MatrixTranslate(
 	(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.x,
 	(* (* (* (struct GameplayData *)moduleData).curTile).floor).position.y,
@@ -779,7 +808,19 @@ void MovePlayer()
 	
 	(* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ].transform = MatrixMultiply(rot,trans);
 	
+	//raycast floor
 	floorDownHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ] );
+	
+	//transform flower
+	trans = MatrixTranslate(
+	(* (* (struct GameplayData *)moduleData).curflower ).position.x,
+	(* (* (struct GameplayData *)moduleData).curflower ).position.y,
+	(* (* (struct GameplayData *)moduleData).curflower ).position.z);
+	
+	(* (struct GameplayData *)moduleData).flowerModels[ (* (* (struct GameplayData *)moduleData).curflower ).modelIndex ].transform = MatrixMultiply(rot,trans);
+	
+	//raycast flower
+	flowerDownHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).flowerModels[ (* (* (struct GameplayData *)moduleData).curflower ).modelIndex ] );
 	
 	//forward
 	upVec = Vector3Scale( upVec, 1.0f );
@@ -788,6 +829,7 @@ void MovePlayer()
 	
 	buildingForwardHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).buildingModels[ (* (* (* (struct GameplayData *)moduleData).curTile).building).modelIndex ] );
 	floorForwardHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).floorModels[ (* (* (* (struct GameplayData *)moduleData).curTile).floor).modelIndex ] );
+	flowerForwardHit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).flowerModels[ (* (* (struct GameplayData *)moduleData).curflower ).modelIndex ] );
 	
 	//debug
 	/*offset = Vector3Scale( rayTest.direction, FORWARDRAYMAXDIST );
@@ -814,6 +856,16 @@ void MovePlayer()
 	if ( floorForwardHit.distance > FORWARDRAYMAXDIST )
 	{
 		floorForwardHit.hit = false;
+	}
+	
+	if ( flowerDownHit.distance > DOWNRAYMAXDIST )
+	{
+		flowerDownHit.hit = false;
+	}
+	
+	if ( flowerForwardHit.distance > FORWARDRAYMAXDIST )
+	{
+		flowerForwardHit.hit = false;
 	}
 	
 	
@@ -867,11 +919,51 @@ void MovePlayer()
 		floorHit = false;
 	}
 	
-	//check if both hit
-	if ( buildingHit && floorHit )
+	//check if flower hit
+	if ( flowerDownHit.hit == true && flowerForwardHit.hit == true )
+	{
+		//flowerHitNormal = Vector3Lerp( flowerDownHit.normal, flowerForwardHit.normal, 0.5f);
+		//flowerHitPos = Vector3Lerp( flowerDownHit.position, flowerForwardHit.position, 0.5f);
+		
+		//prioritize walls
+		flowerHitNormal = flowerForwardHit.normal;
+		flowerHitPos = flowerForwardHit.position;
+	}
+	else if ( flowerDownHit.hit == true )
+	{
+		flowerHitNormal = flowerDownHit.normal;
+		flowerHitPos = flowerDownHit.position;
+	}
+	else if ( flowerForwardHit.hit == true )
+	{
+		flowerHitNormal = flowerForwardHit.normal;
+		flowerHitPos = flowerForwardHit.position;
+	}
+	else
+	{
+		flowerHit = false;
+	}
+	
+	if ( flowerHit && floorHit )
+	{
+		hitNormal = Vector3Lerp( flowerHitNormal, floorHitNormal, 0.5f);
+		hitPos = Vector3Lerp( flowerHitPos, floorHitPos, 0.5f);
+	}
+	else if ( buildingHit && flowerHit )
+	{
+		hitNormal = Vector3Lerp( buildingHitNormal, flowerHitNormal, 0.5f);
+		hitPos = Vector3Lerp( buildingHitPos, flowerHitPos, 0.5f);
+	}
+	else if ( buildingHit && floorHit )
 	{
 		hitNormal = Vector3Lerp( buildingHitNormal, floorHitNormal, 0.5f);
 		hitPos = Vector3Lerp( buildingHitPos, floorHitPos, 0.5f);
+	}
+	else if ( flowerHit )
+	{
+		hitNormal = flowerHitNormal;
+		
+		hitPos = flowerHitPos;
 	}
 	else if ( buildingHit )
 	{
@@ -890,10 +982,9 @@ void MovePlayer()
 		applyGrav = true;
 	}
 	
-	//todo flowers.
-
 	//successful hit, set model rotation to normal direction.
-	if ( buildingHit || floorHit )//TODO: fix transform NAN when reaching edge of cube. parallel normal & ray maybe.
+	//TODO: fix player rotation being shifted on some normals.  the math or logic is wrong here.
+	if ( buildingHit || floorHit || flowerHit )//TODO: fix transform NAN when reaching edge of cube. parallel normal & ray maybe.
 	{	
 		Vector3 up = (Vector3){0.0f, 1.0f, 0.0f};
 		//thanks to Mauricio Cele Lopez Belon and his answer to the question here: https://stackoverflow.com/questions/63212143/calculating-object-rotation-based-on-plane-normal/63255665#63255665
