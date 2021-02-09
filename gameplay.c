@@ -78,6 +78,29 @@ void DrawTiles()
 			}
 		}
 		
+		//draw pollen
+		if ( curNode == (* (struct GameplayData *)moduleData).curTile )
+		{
+			struct Node *curPollen;
+			curPollen = (*curNode).pollenListStart;
+			
+			while (curPollen != NULL)
+			{
+				translation = MatrixTranslate( 
+				(*curPollen).position.x,
+				(*curPollen).position.y,
+				(*curPollen).position.z );
+				
+				transform = MatrixMultiply( rotation, translation );
+				
+				(* (struct GameplayData *)moduleData).pollenModel.transform = transform;
+				
+				DrawModel( (* (struct GameplayData *)moduleData).pollenModel, (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
+				
+				curPollen = (*curPollen).next;
+			}
+		}
+		
 		curNode = (*curNode).next;
 	}
 
@@ -122,6 +145,20 @@ void RemoveTiles()
 			curFlower = nextFlower;
 		}
 		
+		//free pollen
+		struct Node *curPollen;
+		struct Node *nextPollen;
+		curPollen = (*curNode).pollenListStart;
+		
+		while (curPollen != NULL)
+		{
+			nextPollen = (*curPollen).next;
+		
+			free(curPollen);
+			
+			curPollen = nextPollen;
+		}
+		
 		//free node
 		nextNode = (*curNode).next;
 		
@@ -134,8 +171,26 @@ void RemoveTiles()
 	(* (struct GameplayData *)moduleData).tileListEnd = NULL;
 }
 
+void GetFlowerHitY()
+{
+	for (int x = 0; x < MAXFLOWERS; x++)
+	{
+		RayHitInfo hit;
+		Ray rayTest;
+
+		rayTest.direction = (Vector3){ 0.0f, -1.0f, 0.0f };
+		rayTest.position = (Vector3){ 0.0f, 100.0f, 0.0f };
+		
+		hit = GetCollisionRayModel(rayTest, (* (struct GameplayData *)moduleData).flowerModels[ x ] );
+		
+		(* (struct GameplayData *)moduleData).flowerHitY[ x ] = hit.position.y;
+	}
+}
+
 void InitTiles()
 {
+	GetFlowerHitY();
+	
 	float propDensity = 40.0f;
 	float halfTileSize = TILESIZE * 0.5f;
 	float propInterval = TILESIZE / propDensity;
@@ -236,15 +291,23 @@ void InitTiles()
 			struct Node dummyFlower;
 			dummyFlower.prev = NULL;
 			dummyFlower.next = NULL;
+			
+			struct Node dummyPollen;
+			dummyPollen.prev = NULL;
+			dummyPollen.next = NULL;
 	
 			for (int w = 0; w < flowerDensity; w++)
 			{
 				for (int z = 0; z < flowerDensity; z++)
 				{
 					struct Node *newFlower = (struct Node *)malloc( sizeof(struct Node) );
+					struct Node *newPollen = (struct Node *)malloc( sizeof(struct Node) );
 			
 					(*newFlower).prev = NULL;
 					(*newFlower).next = NULL;
+					
+					(*newPollen).prev = NULL;
+					(*newPollen).next = NULL;
 					
 					if (dummyFlower.prev == NULL)
 					{
@@ -252,6 +315,11 @@ void InitTiles()
 						dummyFlower.next = newFlower;
 						
 						(*newTile).flowerListStart = newFlower;
+						
+						dummyPollen.prev = newPollen;
+						dummyPollen.next = newPollen;
+						
+						(*newTile).pollenListStart = newPollen;
 					}
 					else
 					{
@@ -260,6 +328,12 @@ void InitTiles()
 						dummyFlower.next = newFlower;
 						
 						(*newTile).flowerListEnd = newFlower;
+						
+						(*newPollen).prev = dummyPollen.next;
+						(*dummyPollen.next).next = newPollen;
+						dummyPollen.next = newPollen;
+						
+						(*newTile).pollenListEnd = newPollen;
 					}
 					
 					(*newFlower).position.x = ( (*newTile).position.x - halfTileSize ) + ( flowerInterval * (float)z );
@@ -272,6 +346,11 @@ void InitTiles()
 					
 					(*newFlower).type = FLOWER;
 					(*newFlower).modelIndex = GetRandomValue(0, MAXFLOWERS - 1);
+					
+					(*newPollen).type = MISC;
+					(*newPollen).position.x = (*newFlower).position.x;
+					(*newPollen).position.y = (* (struct GameplayData *)moduleData).flowerHitY[ (*newFlower).modelIndex ];
+					(*newPollen).position.z = (*newFlower).position.z;
 				}
 			}
 			
@@ -1084,6 +1163,11 @@ void GameplayInit()
 	strcat(curDir, "/art/gfx/misc/pollen.png");
 	(*data).pollenTex = LoadTexture( curDir );
 	
+	SetMaterialTexture(
+	&( (*data).pollenModel.materials[0] ),
+	MAP_DIFFUSE,
+	(*data).pollenTex );
+	
 	memset(curDir, '\0', sizeof(char) * 1024);
 	strcpy(curDir, workDir );
 	strcat(curDir, "/art/gfx/misc/cloud.obj");
@@ -1094,6 +1178,11 @@ void GameplayInit()
 	strcat(curDir, "/art/gfx/misc/cloud.png");
 	(*data).cloudTex = LoadTexture( curDir );
 	
+	SetMaterialTexture(
+	&( (*data).cloudModel.materials[0] ),
+	MAP_DIFFUSE,
+	(*data).cloudTex );
+	
 	memset(curDir, '\0', sizeof(char) * 1024);
 	strcpy(curDir, workDir );
 	strcat(curDir, "/art/gfx/misc/droplet.obj");
@@ -1103,6 +1192,11 @@ void GameplayInit()
 	strcpy(curDir, workDir );
 	strcat(curDir, "/art/gfx/misc/droplet.png");
 	(*data).dropletTex = LoadTexture( curDir );
+	
+	SetMaterialTexture(
+	&( (*data).dropletModel.materials[0] ),
+	MAP_DIFFUSE,
+	(*data).dropletTex );
 	
 	(*data).tileListStart = NULL;
 	(*data).tileListEnd = NULL;

@@ -111,6 +111,7 @@ struct GameplayData
 	int flowerCount;
 	Model flowerModels[MAXFLOWERS];
 	Texture2D flowerTex[MAXFLOWERS];
+	float flowerHitY[MAXFLOWERS];
 	int npcCount;
 	Model npcModels[MAXNPCS];
 	
@@ -143,6 +144,7 @@ void CheckTileCollision();
 void InitTiles();
 void RemoveTiles();
 void DrawTiles();
+void GetFlowerHitY();
 
 void GameplayInit();
 void GameplayExit();
