@@ -10,6 +10,98 @@
 #define RLIGHTS_IMPLEMENTATION
 #include "rlights.h"
 
+void RespawnPollen(void *data)
+{
+	struct Node *pollen = (struct Node *)data;
+	(*pollen).visible = true;
+}
+
+void ScheduleTask( void (*task)(void *data), void *data,  float maxTime )
+{
+	struct Task *newTask = (struct Task *)malloc( sizeof(struct Task) );
+	
+	(*newTask).prev = NULL;
+	(*newTask).next = NULL;
+	
+	(*newTask).task = task;
+	(*newTask).data = data;
+	(*newTask).maxTime = maxTime;
+	(*newTask).elapsedTime = 0.0f;
+	
+	if ( (* (struct GameplayData *)moduleData).taskListStart == NULL )//no tasks
+	{
+		(* (struct GameplayData *)moduleData).taskListStart = newTask;
+		(* (struct GameplayData *)moduleData).taskListEnd = newTask;
+	}
+	else//tasks waiting
+	{
+		(* (* (struct GameplayData *)moduleData).taskListEnd).next = newTask;
+		(*newTask).prev = (* (struct GameplayData *)moduleData).taskListEnd;
+	}
+}
+
+void PollTasks()
+{
+	struct Task *curTask = (* (struct GameplayData *)moduleData).taskListStart;
+	
+	while ( curTask != NULL )
+	{
+		(*curTask).elapsedTime += dt.deltaTime;
+		
+		if ( (*curTask).elapsedTime >= (*curTask).maxTime )
+		{
+			(*curTask).task( (*curTask).data );//call functor
+			
+			if ( (*curTask).prev != NULL )
+			{
+				if ( (*curTask).next != NULL )//recouple
+				{
+					(* (*curTask).prev).next = (*curTask).next;
+					(* (*curTask).next).prev = (*curTask).prev;
+					
+					struct Task *dummy = curTask;
+					curTask = (*curTask).next;
+					free( dummy );
+					continue;
+				}
+				else//last task
+				{
+					(* (*curTask).prev).next = NULL;
+					(* (struct GameplayData *)moduleData).taskListEnd = (*curTask).prev;
+					
+					free( curTask );
+					curTask = NULL;
+					continue;
+				}
+			}
+			else//first task
+			{
+				if ( (*curTask).next != NULL )
+				{
+					(* (*curTask).next).prev = NULL;
+					(* (struct GameplayData *)moduleData).taskListStart = (*curTask).next;
+					
+					struct Task *dummy = curTask;
+					curTask = (*curTask).next;
+					free( dummy );
+					continue;
+				}
+				else//only task
+				{
+					(* (struct GameplayData *)moduleData).taskListStart = NULL;
+					(* (struct GameplayData *)moduleData).taskListEnd = NULL;
+					
+					free( curTask );
+					curTask = NULL;
+					continue;
+				}
+			}
+		}
+		
+		curTask = (*curTask).next;
+	}
+}
+
 struct Node* CheckNodeCollision(struct Node *node)
 {
 	struct Node *curNode = NULL;
@@ -164,16 +256,19 @@ void DrawTiles()
 			
 			while (curPollen != NULL)
 			{
-				translation = MatrixTranslate( 
-				(*curPollen).position.x,
-				(*curPollen).position.y,
-				(*curPollen).position.z );
-				
-				transform = MatrixMultiply( rotation, translation );
-				
-				(* (struct GameplayData *)moduleData).pollenModel.transform = transform;
-				
-				DrawModel( (* (struct GameplayData *)moduleData).pollenModel, (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
+				if ( (*curPollen).visible == true )
+				{
+					translation = MatrixTranslate( 
+					(*curPollen).position.x,
+					(*curPollen).position.y,
+					(*curPollen).position.z );
+					
+					transform = MatrixMultiply( rotation, translation );
+					
+					(* (struct GameplayData *)moduleData).pollenModel.transform = transform;
+					
+					DrawModel( (* (struct GameplayData *)moduleData).pollenModel, (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
+				}
 				
 				curPollen = (*curPollen).next;
 			}
@@ -434,6 +529,7 @@ void InitTiles()
 					(*newPollen).colliderPrev = NULL;
 					(*newPollen).colliderNext = NULL;
 					IndexCollider( newPollen );
+					(*newPollen).visible = true;
 				}
 			}
 			
@@ -943,7 +1039,11 @@ void MovePlayer()
 		
 		if ( pollenHit != NULL )
 		{
-			//TraceLog(LOG_INFO, "hit!");
+			if ( (*pollenHit).visible == true )
+			{
+				(*pollenHit).visible = false;
+				ScheduleTask( &RespawnPollen, pollenHit, 30.0f);
+			}
 		}
 	}
 	
@@ -1314,6 +1414,9 @@ void GameplayInit()
 	(*data).curPlayer = NULL;
 	InitPlayers();
 	
+	(*data).taskListStart = NULL;
+	(*data).taskListEnd = NULL;
+	
 	(*data).moveDir.x = 0.0f;(*data).moveDir.y = 0.0f;(*data).moveDir.z = 0.0f;
 	(*data).playerRotAngle = 0.0f;
 	
@@ -1414,6 +1517,8 @@ void GameplayLoop()
     cameraPos,
     UNIFORM_VEC3);*/
 
+	PollTasks();
+	
 	UpdatePlayerState();
 	MovePlayer();
 	

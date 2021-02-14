@@ -37,6 +37,16 @@ static void LoadMaterialPBR(Material *mat, char *path);
 enum NodeType {BUILDING, PROP, FLOWER, NPC, PLAYER, FLOOR, MISC};
 enum PlayerState {IDLE, RUN};
 
+
+struct Task
+{
+	float elapsedTime, maxTime;
+	void *data;
+	void (*task)(void *data);
+	
+	struct Task *prev, *next;
+};
+
 struct Trigger//shift tiles when player is colliding with just one.
 {
 	BoundingBox bounds;
@@ -55,6 +65,7 @@ struct Node
 	int collisionMask;//node belongs to this mask.
 	int colliderMask;//node collides with this mask.
 	struct Trigger trigger;
+	bool visible;
 	
 	struct Node *prev, *next;
 	
@@ -140,6 +151,7 @@ struct GameplayData
 	Texture2D dropletTex;
 	
 	struct Node *colliders[COLDIM][COLDIM];
+	struct Task *taskListStart, *taskListEnd;
 };
 
 void DebugDrawNormals(Model *model);
@@ -157,6 +169,9 @@ void DrawTiles();
 void GetFlowerHitY();
 void IndexCollider(struct Node *node);
 struct Node* CheckNodeCollision(struct Node *node);
+void ScheduleTask( void (*task)(void *data), void *data, float maxTime );
+void PollTasks();
+void RespawnPollen(void *data);
 
 void GameplayInit();
 void GameplayExit();
