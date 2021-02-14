@@ -10,6 +10,84 @@
 #define RLIGHTS_IMPLEMENTATION
 #include "rlights.h"
 
+struct Node* CheckNodeCollision(struct Node *node)
+{
+	struct Node *curNode = NULL;
+	
+	curNode = (* (struct GameplayData *)moduleData).colliders[ (int) ( (*node).colliderIndex.x ) ][ (int) ( (*node).colliderIndex.y ) ];
+	
+	while (curNode != NULL)
+	{
+		if ( curNode != node )
+		{
+			if ( CheckCollisionSpheres(	(*node).position, 0.5f,	(*curNode).position, 0.5f) )
+			{
+				return curNode;
+			}
+		}
+		
+		curNode = (*curNode).colliderNext;
+	}
+	
+	return NULL;
+}
+
+void IndexCollider(struct Node *node)
+{
+	//#define COLLIDERINTERVAL 10
+	//#define COLDIM 60//(TILESIZE/COLLIDERINTERVAL) * 3
+	//float offset = TILESIZE * TILEFACTOR;
+	//offset *= 1.5f;
+
+	Vector2 index;
+	index.x = ( ( (*node).position.x ) + COLLIDEROFFSET ) / (float)COLLIDERINTERVAL;
+	index.y = ( ( (*node).position.z ) + COLLIDEROFFSET ) / (float)COLLIDERINTERVAL;
+	
+	index.x = Clamp( index.x, 0.0f, (float)(COLDIM-1) );
+	index.y = Clamp( index.y, 0.0f, (float)(COLDIM-1) );
+	
+	//TraceLog(LOG_INFO, "position: %f %f index: %d %d", (*node).position.x, (*node).position.z, (int)(index.x), (int)(index.y));
+	
+	if ( (*node).colliderNext != NULL )//indexed already, has next
+	{
+		if ( (*node).colliderPrev != NULL )//decouple this and reconnect the other links
+		{
+			(* ((*node).colliderPrev) ).colliderNext = (*node).colliderNext;
+			(* ((*node).colliderNext) ).colliderPrev = (*node).colliderPrev;
+		}
+		else//no prev, reset first index
+		{
+			(* ((*node).colliderNext) ).colliderPrev = NULL;
+			(* (struct GameplayData *)moduleData).colliders[ (int) ( (*node).colliderIndex.x ) ][ (int) ( (*node).colliderIndex.y ) ] = (*node).colliderNext;
+		}
+	}
+	else if ( (*node).colliderPrev != NULL )//indexed already, has prev
+	{
+		(* ((*node).colliderPrev) ).colliderNext = NULL;
+	}
+	else if ( (* (struct GameplayData *)moduleData).colliders[ (int) ( (*node).colliderIndex.x ) ][ (int) ( (*node).colliderIndex.y ) ] == node )
+	{
+		(* (struct GameplayData *)moduleData).colliders[ (int) ( (*node).colliderIndex.x ) ][ (int) ( (*node).colliderIndex.y ) ] = NULL;
+	}
+	
+	(*node).colliderNext = NULL;
+	(*node).colliderPrev = NULL;
+	
+	if ( (* (struct GameplayData *)moduleData).colliders[(int)(index.x)][(int)(index.y)] == NULL )//empty slot
+	{
+		(* (struct GameplayData *)moduleData).colliders[(int)(index.x)][(int)(index.y)] = node;
+	}
+	else//slot occupied
+	{
+		(* ( (* (struct GameplayData *)moduleData).colliders[(int)(index.x)][(int)(index.y)] ) ).colliderPrev = node;
+		(*node).colliderNext = (* (struct GameplayData *)moduleData).colliders[(int)(index.x)][(int)(index.y)];
+		
+		(* (struct GameplayData *)moduleData).colliders[(int)(index.x)][(int)(index.y)] = node;
+	}
+	
+	(*node).colliderIndex = index;
+}
+
 void DrawTiles()
 {
 	struct Tile *curNode;
@@ -204,9 +282,9 @@ void InitTiles()
 	dummy.prev = NULL;
 	dummy.next = NULL;
 	
-	for (int y = -1; y <= 1; y++)
+	for (int y = -TILEFACTOR; y <= TILEFACTOR; y++)
 	{
-		for (int x = -1; x <= 1; x++)
+		for (int x = -TILEFACTOR; x <= TILEFACTOR; x++)
 		{
 			struct Tile *newTile = (struct Tile *)malloc( sizeof(struct Tile) );
 			
@@ -351,6 +429,11 @@ void InitTiles()
 					(*newPollen).position.x = (*newFlower).position.x;
 					(*newPollen).position.y = (* (struct GameplayData *)moduleData).flowerHitY[ (*newFlower).modelIndex ];
 					(*newPollen).position.z = (*newFlower).position.z;
+					
+					(*newPollen).colliderIndex = Vector2Zero();
+					(*newPollen).colliderPrev = NULL;
+					(*newPollen).colliderNext = NULL;
+					IndexCollider( newPollen );
 				}
 			}
 			
@@ -603,6 +686,12 @@ void InitPlayers()
 	(* (struct GameplayData *)moduleData).playerListEnd = dummy.next;
 	(* (struct GameplayData *)moduleData).curPlayer = dummy.prev;
 	
+	(* (* (struct GameplayData *)moduleData).curPlayer).node.colliderIndex = Vector2Zero();
+	(* (* (struct GameplayData *)moduleData).curPlayer).node.colliderPrev = NULL;
+	(* (* (struct GameplayData *)moduleData).curPlayer).node.colliderNext = NULL;
+	
+	IndexCollider( &( (* (* (struct GameplayData *)moduleData).curPlayer).node ) );
+	
 	ClearDirectoryFiles();
 }
 
@@ -846,6 +935,16 @@ void MovePlayer()
 		translation = MatrixTranslate( offset.x, offset.y, offset.z );
 		
 		(*model).transform = MatrixMultiply(rotation, translation);
+		
+		IndexCollider( &( (* (* (struct GameplayData *)moduleData).curPlayer).node ) );
+		
+		struct Node *pollenHit = NULL;
+		pollenHit = CheckNodeCollision( &( (* (* (struct GameplayData *)moduleData).curPlayer).node ) );
+		
+		if ( pollenHit != NULL )
+		{
+			//TraceLog(LOG_INFO, "hit!");
+		}
 	}
 	
 	//raycast for normal alignment.
@@ -1128,6 +1227,14 @@ void GameplayInit()
 	
 	struct GameplayData *data = (struct GameplayData *)malloc(sizeof(struct GameplayData));
 	moduleData = data;
+	
+	for (int y = 0; y < COLDIM; y++)
+	{
+		for (int x = 0; x < COLDIM; x++)
+		{
+			(*data).colliders[x][y] = NULL;
+		}
+	}
 	
 	const char *workDir = GetWorkingDirectory();
 	char curDir[1024];

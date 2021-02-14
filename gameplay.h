@@ -13,14 +13,18 @@
 #define MAXNPCS 1
 #define MAXFLOWERS 3
 #define TILESIZE 200.0f
+#define TILEFACTOR 1
 #define MAXANIMSTATES 2
 #define ROTMINCLAMP 180.0f
 #define ROTMAXCLAMP -180.0f
 #define DOWNRAYMAXDIST 1.0f
 #define FORWARDRAYMAXDIST 1.0f
 #define PLAYERSPEED 10.0f
-#define ROTSPEED 180.0f
+#define ROTSPEED 360.0f
 #define GRAVITY -1.0f
+#define COLLIDERINTERVAL 10
+#define COLDIM 60//(TILESIZE/COLLIDERINTERVAL) * 3
+#define COLLIDEROFFSET 300.0f//(TILESIZE * TILEFACTOR) * 1.5f
 
 //pbr
 #define CUBEMAP_SIZE        1024        // Cubemap texture size
@@ -33,6 +37,14 @@ static void LoadMaterialPBR(Material *mat, char *path);
 enum NodeType {BUILDING, PROP, FLOWER, NPC, PLAYER, FLOOR, MISC};
 enum PlayerState {IDLE, RUN};
 
+struct Trigger//shift tiles when player is colliding with just one.
+{
+	BoundingBox bounds;
+	bool colliding;
+	Vector3 scale;
+	struct Node *collidersListStart, *collidersListEnd, *curCollider;
+};
+
 struct Node
 {
 	enum NodeType type;
@@ -42,16 +54,12 @@ struct Node
 	Vector3 scale;
 	int collisionMask;//node belongs to this mask.
 	int colliderMask;//node collides with this mask.
+	struct Trigger trigger;
 	
 	struct Node *prev, *next;
-};
-
-struct Trigger//shift tiles when player is colliding with just one.
-{
-	BoundingBox bounds;
-	bool colliding;
-	Vector3 scale;
-	struct Node *collidersListStart, *collidersListEnd, *curCollider;
+	
+	struct Node *colliderPrev, *colliderNext;
+	Vector2 colliderIndex;
 };
 
 struct Tile
@@ -130,6 +138,8 @@ struct GameplayData
 	Texture2D cloudTex;
 	Model dropletModel;
 	Texture2D dropletTex;
+	
+	struct Node *colliders[COLDIM][COLDIM];
 };
 
 void DebugDrawNormals(Model *model);
@@ -145,6 +155,8 @@ void InitTiles();
 void RemoveTiles();
 void DrawTiles();
 void GetFlowerHitY();
+void IndexCollider(struct Node *node);
+struct Node* CheckNodeCollision(struct Node *node);
 
 void GameplayInit();
 void GameplayExit();
