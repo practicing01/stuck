@@ -37,7 +37,8 @@ static void LoadMaterialPBR(Material *mat, char *path);
 enum NodeType {BUILDING, PROP, FLOWER, NPC, PLAYER, FLOOR, MISC};
 enum PlayerState {IDLE, RUN};
 
-
+//debug
+int taskCounter;
 struct Task
 {
 	float elapsedTime, maxTime;
@@ -45,6 +46,9 @@ struct Task
 	void (*task)(void *data);
 	
 	struct Task *prev, *next;
+	
+	//debug
+	int id;
 };
 
 struct Trigger//shift tiles when player is colliding with just one.

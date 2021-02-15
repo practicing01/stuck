@@ -27,6 +27,8 @@ void ScheduleTask( void (*task)(void *data), void *data,  float maxTime )
 	(*newTask).data = data;
 	(*newTask).maxTime = maxTime;
 	(*newTask).elapsedTime = 0.0f;
+	(*newTask).id = taskCounter;
+	taskCounter++;
 	
 	if ( (* (struct GameplayData *)moduleData).taskListStart == NULL )//no tasks
 	{
@@ -37,6 +39,7 @@ void ScheduleTask( void (*task)(void *data), void *data,  float maxTime )
 	{
 		(* (* (struct GameplayData *)moduleData).taskListEnd).next = newTask;
 		(*newTask).prev = (* (struct GameplayData *)moduleData).taskListEnd;
+		(* (struct GameplayData *)moduleData).taskListEnd = newTask;
 	}
 }
 
@@ -1416,6 +1419,8 @@ void GameplayInit()
 	
 	(*data).taskListStart = NULL;
 	(*data).taskListEnd = NULL;
+	//debug
+	taskCounter = 0;
 	
 	(*data).moveDir.x = 0.0f;(*data).moveDir.y = 0.0f;(*data).moveDir.z = 0.0f;
 	(*data).playerRotAngle = 0.0f;
