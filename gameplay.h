@@ -26,7 +26,8 @@
 #define COLDIM 60//(TILESIZE/COLLIDERINTERVAL) * 3
 #define COLLIDEROFFSET 300.0f//(TILESIZE * TILEFACTOR) * 1.5f
 #define MAXNPCCOUNT 25
-#define NPCSPEED 0.1f
+#define NPCSPEED 0.5f
+#define NPCSPAWNRADIUS 4.0f
 
 //pbr
 #define CUBEMAP_SIZE        1024        // Cubemap texture size
@@ -120,7 +121,7 @@ struct NPC
 	struct Node node;
 	int curFrame;
 	float elapsedTime;
-	Vector3 dest;
+	Vector3 start,dest;
 	float elapsedLerp;
 	Matrix rotation;
 	

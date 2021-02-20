@@ -19,7 +19,7 @@ void ProcessNPCS()
 		(*curNode).elapsedLerp += NPCSPEED * dt.deltaTime;
 		
 		(*curNode).node.position = Vector3Lerp(
-		(*curNode).node.position,
+		(*curNode).start,
 		(*curNode).dest,
 		(*curNode).elapsedLerp);
 		
@@ -82,7 +82,7 @@ void ProcessNPCS()
 					continue;
 				}
 			}
-			else//first task
+			else//first node
 			{
 				if ( (*curNode).next != NULL )
 				{
@@ -150,7 +150,14 @@ void SpawnNPC()
 		struct NPC *curNode;
 		curNode = (* (struct GameplayData *)moduleData).npcPoolEnd;
 		
-		(*curNode).node.position = (Vector3){0.0f, 0.0f, 0.0f};
+		Vector3 start = (* (* (struct GameplayData *)moduleData).curPlayer).node.position;
+		start.x += (float)GetRandomValue(-NPCSPAWNRADIUS * 10.0f, NPCSPAWNRADIUS * 10.0f);
+		start.y = 0.0f;
+		start.z += (float)GetRandomValue(-NPCSPAWNRADIUS * 10.0f, NPCSPAWNRADIUS * 10.0f);
+		
+		(*curNode).start = start;
+		
+		(*curNode).node.position = start;
 		(*curNode).dest = (* (* (struct GameplayData *)moduleData).curPlayer).node.position;
 		(*curNode).dest.y = 0.0f;
 		
