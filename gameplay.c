@@ -10,6 +10,382 @@
 #define RLIGHTS_IMPLEMENTATION
 #include "rlights.h"
 
+void ProcessNPCS()
+{
+	struct NPC *curNode = (* (struct GameplayData *)moduleData).npcListStart;
+	
+	while ( curNode != NULL )
+	{
+		(*curNode).elapsedLerp += NPCSPEED * dt.deltaTime;
+		
+		(*curNode).node.position = Vector3Lerp(
+		(*curNode).node.position,
+		(*curNode).dest,
+		(*curNode).elapsedLerp);
+		
+		if ( (*curNode).elapsedLerp >= 1.0f )
+		{
+			if ( (*curNode).prev != NULL )
+			{
+				if ( (*curNode).next != NULL )//recouple
+				{
+					(* (*curNode).prev).next = (*curNode).next;
+					(* (*curNode).next).prev = (*curNode).prev;
+					
+					struct NPC *dummy = curNode;
+					curNode = (*curNode).next;
+					
+					if ( (* (struct GameplayData *)moduleData).npcPoolStart == NULL )//no nodes
+					{
+						(* (struct GameplayData *)moduleData).npcPoolStart = dummy;
+						(* (struct GameplayData *)moduleData).npcPoolEnd = dummy;
+						
+						(*dummy).prev = NULL;
+						(*dummy).next = NULL;
+					}
+					else//nodes waiting
+					{
+						(* (* (struct GameplayData *)moduleData).npcPoolEnd).next = dummy;
+						(*dummy).prev = (* (struct GameplayData *)moduleData).npcPoolEnd;
+						(* (struct GameplayData *)moduleData).npcPoolEnd = dummy;
+						(*dummy).next = NULL;
+					}
+		
+					continue;
+				}
+				else//last node
+				{
+					(* (*curNode).prev).next = NULL;
+					(* (struct GameplayData *)moduleData).npcListEnd = (*curNode).prev;
+					
+					struct NPC *dummy = curNode;
+					
+					if ( (* (struct GameplayData *)moduleData).npcPoolStart == NULL )//no nodes
+					{
+						(* (struct GameplayData *)moduleData).npcPoolStart = dummy;
+						(* (struct GameplayData *)moduleData).npcPoolEnd = dummy;
+						
+						(*dummy).prev = NULL;
+						(*dummy).next = NULL;
+					}
+					else//nodes waiting
+					{
+						(* (* (struct GameplayData *)moduleData).npcPoolEnd).next = dummy;
+						(*dummy).prev = (* (struct GameplayData *)moduleData).npcPoolEnd;
+						(* (struct GameplayData *)moduleData).npcPoolEnd = dummy;
+						(*dummy).next = NULL;
+					}
+					
+					curNode = NULL;
+					continue;
+				}
+			}
+			else//first task
+			{
+				if ( (*curNode).next != NULL )
+				{
+					(* (*curNode).next).prev = NULL;
+					(* (struct GameplayData *)moduleData).npcListStart = (*curNode).next;
+					
+					struct NPC *dummy = curNode;
+					curNode = (*curNode).next;
+					
+					if ( (* (struct GameplayData *)moduleData).npcPoolStart == NULL )//no nodes
+					{
+						(* (struct GameplayData *)moduleData).npcPoolStart = dummy;
+						(* (struct GameplayData *)moduleData).npcPoolEnd = dummy;
+						
+						(*dummy).prev = NULL;
+						(*dummy).next = NULL;
+					}
+					else//nodes waiting
+					{
+						(* (* (struct GameplayData *)moduleData).npcPoolEnd).next = dummy;
+						(*dummy).prev = (* (struct GameplayData *)moduleData).npcPoolEnd;
+						(* (struct GameplayData *)moduleData).npcPoolEnd = dummy;
+						(*dummy).next = NULL;
+					}
+					
+					continue;
+				}
+				else//only node
+				{
+					(* (struct GameplayData *)moduleData).npcListStart = NULL;
+					(* (struct GameplayData *)moduleData).npcListEnd = NULL;
+					
+					struct NPC *dummy = curNode;
+					
+					if ( (* (struct GameplayData *)moduleData).npcPoolStart == NULL )//no nodes
+					{
+						(* (struct GameplayData *)moduleData).npcPoolStart = dummy;
+						(* (struct GameplayData *)moduleData).npcPoolEnd = dummy;
+						
+						(*dummy).prev = NULL;
+						(*dummy).next = NULL;
+					}
+					else//nodes waiting
+					{
+						(* (* (struct GameplayData *)moduleData).npcPoolEnd).next = dummy;
+						(*dummy).prev = (* (struct GameplayData *)moduleData).npcPoolEnd;
+						(* (struct GameplayData *)moduleData).npcPoolEnd = dummy;
+						(*dummy).next = NULL;
+					}
+					
+					curNode = NULL;
+					continue;
+				}
+			}
+		}
+		
+		curNode = (*curNode).next;
+	}
+}
+
+void SpawnNPC()
+{
+	if ( (* (struct GameplayData *)moduleData).npcPoolStart != NULL )
+	{
+		struct NPC *curNode;
+		curNode = (* (struct GameplayData *)moduleData).npcPoolStart;
+		
+		(*curNode).node.position = (Vector3){0.0f, 0.0f, 0.0f};
+		(*curNode).dest = (* (* (struct GameplayData *)moduleData).curPlayer).node.position;
+		(*curNode).dest.y = 0.0f;
+		
+		if ( (*curNode).prev != NULL )
+		{
+			if ( (*curNode).next != NULL )//recouple
+			{
+				(* (*curNode).prev).next = (*curNode).next;
+				(* (*curNode).next).prev = (*curNode).prev;
+			}
+			else//last curNode
+			{
+				(* (*curNode).prev).next = NULL;
+				(* (struct GameplayData *)moduleData).npcPoolEnd = (*curNode).prev;
+			}
+		}
+		else//first curNode
+		{
+			if ( (*curNode).next != NULL )
+			{
+				(* (*curNode).next).prev = NULL;
+				(* (struct GameplayData *)moduleData).npcPoolStart = (*curNode).next;
+			}
+			else//only task
+			{
+				(* (struct GameplayData *)moduleData).npcPoolStart = NULL;
+				(* (struct GameplayData *)moduleData).npcPoolEnd = NULL;
+			}
+		}
+		
+		//add to list
+		if ( (* (struct GameplayData *)moduleData).npcListStart == NULL )//no nodes
+		{
+			(* (struct GameplayData *)moduleData).npcListStart = curNode;
+			(* (struct GameplayData *)moduleData).npcListEnd = curNode;
+			
+			(*curNode).prev = NULL;
+			(*curNode).next = NULL;
+		}
+		else//nodes waiting
+		{
+			(* (* (struct GameplayData *)moduleData).npcListEnd).next = curNode;
+			(*curNode).prev = (* (struct GameplayData *)moduleData).npcListEnd;
+			(* (struct GameplayData *)moduleData).npcListEnd = curNode;
+			(*curNode).next = NULL;
+		}
+	}
+	
+	ScheduleTask( &SpawnNPC, NULL, 1.0f);
+}
+
+void DrawNPCS()//todo switch to list instead of pool
+{
+	Matrix rotation = MatrixIdentity();
+	Matrix translation;
+	Matrix transform;
+	
+	struct NPC *curNode;
+	curNode = (* (struct GameplayData *)moduleData).npcPoolStart;
+	
+	while (curNode != NULL)
+	{
+		(*curNode).curFrame++;
+		UpdateModelAnimation( (* (struct GameplayData *)moduleData).npcModels[ (*curNode).node.modelIndex ],
+		*( (* (struct GameplayData *)moduleData).NPCAnims[ (*curNode).node.modelIndex ] ),
+		(*curNode).curFrame);
+		
+		if ( (*curNode).curFrame >= (* (* (struct GameplayData *)moduleData).NPCAnims[ (*curNode).node.modelIndex ] ).frameCount )
+		{
+			(*curNode).curFrame = 0;
+		}
+		
+		translation = MatrixTranslate( 
+		(*curNode).node.position.x,
+		(*curNode).node.position.y,
+		(*curNode).node.position.z );
+		
+		transform = MatrixMultiply( rotation, translation );
+		
+		(* (struct GameplayData *)moduleData).npcModels[ (*curNode).node.modelIndex ].transform = transform;
+		
+		DrawModel( (* (struct GameplayData *)moduleData).npcModels[ (*curNode).node.modelIndex ], (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
+		
+		curNode = (*curNode).next;
+	}
+}
+
+void RemoveNPCS()
+{
+	struct NPC *curNode;
+	struct NPC *nextNode;
+	curNode = (* (struct GameplayData *)moduleData).npcPoolStart;
+	
+	while (curNode != NULL)
+	{
+		nextNode = (*curNode).next;
+		
+		free(curNode);
+		
+		curNode = nextNode;
+	}
+	
+	curNode = (* (struct GameplayData *)moduleData).npcListStart;
+	
+	while (curNode != NULL)
+	{
+		nextNode = (*curNode).next;
+		
+		free(curNode);
+		
+		curNode = nextNode;
+	}
+	
+	(* (struct GameplayData *)moduleData).npcPoolStart = NULL;
+	(* (struct GameplayData *)moduleData).npcPoolEnd = NULL;
+	(* (struct GameplayData *)moduleData).npcListStart = NULL;
+	(* (struct GameplayData *)moduleData).npcListEnd = NULL;
+}
+
+void InitNPCS()
+{
+    const char *workDir = GetWorkingDirectory();
+	char curDir[1024];
+	
+	memset(curDir, '\0', sizeof(char) * 1024);
+	strcpy(curDir, workDir );
+	strcat(curDir, "/art/gfx/npcs");
+	
+	(* (struct GameplayData *)moduleData).npcCount = 0;
+	memset( (* (struct GameplayData *)moduleData).npcModels , '\0', sizeof(Model) * MAXNPCS);
+	memset( (* (struct GameplayData *)moduleData).npcTex , '\0', sizeof(Texture2D) * MAXNPCS);
+	
+	int fileCount = 0;
+    char **files = GetDirectoryFiles(curDir, &fileCount);
+    
+    for (int x = 0; x < fileCount; x++)
+    {
+		char filePath[1024];
+		memset(filePath, '\0', sizeof(char) * 1024);
+		strcpy(filePath, curDir );
+		strcat(filePath, "/");
+		strcat(filePath, files[x]);
+		//TraceLog(LOG_INFO, filePath);
+		
+		if (DirectoryExists(filePath))
+		{
+			if (strcmp(files[x], ".") != 0 && strcmp(files[x], ".."))
+			{
+				//TraceLog(LOG_INFO, filePath);
+				//PopulateModelCache(filePath, models, modelCount, maxCount);//bugged to recurse, not sure if my code or raylibs (get/clear Dir)
+			}
+		}
+		else//not a directory
+		{
+			if (FileExists(filePath) && IsFileExtension(files[x], ".iqm"))
+			{
+				if ( (* (struct GameplayData *)moduleData).npcCount >= MAXNPCS )
+				{
+					TraceLog(LOG_INFO, "maxCount");
+					break;
+				}
+				
+				//TraceLog(LOG_INFO, filePath);
+				//TraceLog(LOG_INFO, files[x]);
+								
+				(* (struct GameplayData *)moduleData).npcModels[ (* (struct GameplayData *)moduleData).npcCount ] = LoadModel( filePath );
+				
+				int animsCount = 0;
+				(* (struct GameplayData *)moduleData).NPCAnims[ (* (struct GameplayData *)moduleData).npcCount ] = LoadModelAnimations( filePath, &animsCount );
+				
+				char texFilePath[1024];
+				memset(texFilePath, '\0', sizeof(char) * 1024);
+				strcpy(texFilePath, curDir );
+				strcat(texFilePath, "/");
+				strcat(texFilePath, GetFileNameWithoutExt(files[x]) );
+				//traditional
+				strcat(texFilePath, ".png");
+				
+				(* (struct GameplayData *)moduleData).npcTex[ (* (struct GameplayData *)moduleData).npcCount ] = LoadTexture( texFilePath );
+				
+				SetMaterialTexture(
+				&( (* (struct GameplayData *)moduleData).npcModels[ (* (struct GameplayData *)moduleData).npcCount ].materials[0] ),
+				MAP_DIFFUSE,
+				(* (struct GameplayData *)moduleData).npcTex[ (* (struct GameplayData *)moduleData).npcCount ] );
+				
+				( (* (struct GameplayData *)moduleData).npcCount ) += 1;
+
+			}
+		}
+	}
+
+	ClearDirectoryFiles();
+    
+    (* (struct GameplayData *)moduleData).npcPoolStart = NULL;
+	(* (struct GameplayData *)moduleData).npcPoolEnd = NULL;
+	(* (struct GameplayData *)moduleData).npcListStart = NULL;
+	(* (struct GameplayData *)moduleData).npcListEnd = NULL;
+    
+    struct NPC dummyNPC;
+	dummyNPC.prev = NULL;
+	dummyNPC.next = NULL;
+	
+	for (int x = 0; x < MAXNPCCOUNT; x++)
+	{
+		struct NPC *newNPC = (struct NPC *)malloc( sizeof(struct NPC) );
+		
+		(*newNPC).prev = NULL;
+		(*newNPC).next = NULL;
+		
+		if (dummyNPC.prev == NULL)
+		{
+			dummyNPC.prev = newNPC;
+			dummyNPC.next = newNPC;
+			
+			(* (struct GameplayData *)moduleData).npcPoolStart = newNPC;
+		}
+		else
+		{
+			(*newNPC).prev = dummyNPC.next;
+			(*dummyNPC.next).next = newNPC;
+			dummyNPC.next = newNPC;
+			
+			(* (struct GameplayData *)moduleData).npcPoolEnd = newNPC;
+		}
+		
+		(*newNPC).node.position.x = 0.0f;
+		(*newNPC).node.position.y = 0.0f;
+		(*newNPC).node.position.z = 0.0f;
+		
+		(*newNPC).node.type = NPCS;
+		(*newNPC).node.modelIndex = 0;//GetRandomValue(0, MAXNPCS - 1);
+		(*newNPC).curFrame = 0;
+		(*newNPC).elapsedTime = 0.0f;
+		(*newNPC).elapsedLerp = 0.0f;
+	}
+}
+
 void RespawnPollen(void *data)
 {
 	struct Node *pollen = (struct Node *)data;
@@ -1362,6 +1738,11 @@ void GameplayInit()
 	strcat(curDir, "/art/gfx/props");
 	PopulateModelCache(curDir, (*data).propModels, (*data).propTex, &( (*data).propCount ), MAXPROPS);
 	
+	memset(curDir, '\0', sizeof(char) * 1024);
+	strcpy(curDir, workDir );
+	strcat(curDir, "/art/gfx/npcs");
+	PopulateModelCache(curDir, (*data).npcModels, (*data).npcTex, &( (*data).npcCount ), MAXNPCS);
+	
 	//special cases:
 	memset(curDir, '\0', sizeof(char) * 1024);
 	strcpy(curDir, workDir );
@@ -1422,6 +1803,9 @@ void GameplayInit()
 	//debug
 	taskCounter = 0;
 	
+	InitNPCS();
+	SpawnNPC();
+	
 	(*data).moveDir.x = 0.0f;(*data).moveDir.y = 0.0f;(*data).moveDir.z = 0.0f;
 	(*data).playerRotAngle = 0.0f;
 	
@@ -1438,10 +1822,11 @@ void GameplayInit()
     SetCameraMode( drawNodesCam, CAMERA_THIRD_PERSON );
 }
 
-void GameplayExit()
+void GameplayExit()//todo move these to their respective functions
 {
 	RemoveTiles();
 	RemovePlayers();
+	RemoveNPCS();
 	
 	for (int x = 0; x < (* (struct GameplayData *)moduleData).buildingCount; x++)
 	{
@@ -1500,6 +1885,21 @@ void GameplayExit()
 		UnloadTexture( (* (struct GameplayData *)moduleData).propTex[x]);
 	}
 	
+	for (int x = 0; x < (* (struct GameplayData *)moduleData).npcCount; x++)
+	{
+		UnloadModel( (* (struct GameplayData *)moduleData).npcModels[x]);
+	}
+	
+	for (int x = 0; x < (* (struct GameplayData *)moduleData).npcCount; x++)
+	{
+		UnloadModelAnimation( * ( (* (struct GameplayData *)moduleData).NPCAnims[x] ) );
+	}
+	
+	for (int x = 0; x < (* (struct GameplayData *)moduleData).npcCount; x++)
+	{
+		UnloadTexture( (* (struct GameplayData *)moduleData).npcTex[x]);
+	}
+	
 	//special cases
 	UnloadModel( (* (struct GameplayData *)moduleData).pollenModel );
 	UnloadTexture( (* (struct GameplayData *)moduleData).pollenTex );
@@ -1527,6 +1927,8 @@ void GameplayLoop()
 	UpdatePlayerState();
 	MovePlayer();
 	
+	ProcessNPCS();
+	
 	drawNodesCam.target = (* (* (struct GameplayData *)moduleData).curPlayer).node.position;
 	UpdateCamera( &drawNodesCam );
 	
@@ -1540,6 +1942,8 @@ void GameplayLoop()
 	//MovePlayer();
 	
 	DrawTiles();
+	
+	DrawNPCS();
 	
 	DrawPlayer();
 	

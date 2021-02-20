@@ -25,6 +25,8 @@
 #define COLLIDERINTERVAL 10
 #define COLDIM 60//(TILESIZE/COLLIDERINTERVAL) * 3
 #define COLLIDEROFFSET 300.0f//(TILESIZE * TILEFACTOR) * 1.5f
+#define MAXNPCCOUNT 25
+#define NPCSPEED 0.1f
 
 //pbr
 #define CUBEMAP_SIZE        1024        // Cubemap texture size
@@ -34,7 +36,7 @@
 static void LoadMaterialPBR(Material *mat, char *path);
 #define PLATFORM_DESKTOP
 
-enum NodeType {BUILDING, PROP, FLOWER, NPC, PLAYER, FLOOR, MISC};
+enum NodeType {BUILDING, PROP, FLOWER, NPCS, PLAYER, FLOOR, MISC};
 enum PlayerState {IDLE, RUN};
 
 //debug
@@ -59,7 +61,7 @@ struct Trigger//shift tiles when player is colliding with just one.
 	struct Node *collidersListStart, *collidersListEnd, *curCollider;
 };
 
-struct Node
+struct Node//todo node should contain animation data.
 {
 	enum NodeType type;
 	int modelIndex;
@@ -113,6 +115,17 @@ struct Player
 	struct Player *prev, *next;
 };
 
+struct NPC
+{
+	struct Node node;
+	int curFrame;
+	float elapsedTime;
+	Vector3 dest;
+	float elapsedLerp;
+	
+	struct NPC *prev, *next;
+};
+
 struct GameplayData
 {
 	Vector3 moveDir;
@@ -137,6 +150,8 @@ struct GameplayData
 	float flowerHitY[MAXFLOWERS];
 	int npcCount;
 	Model npcModels[MAXNPCS];
+	Texture2D npcTex[MAXNPCS];
+	ModelAnimation *NPCAnims[MAXNPCS];
 	
 	struct Tile *tileListStart, *tileListEnd, *curTile;
 	
@@ -156,6 +171,9 @@ struct GameplayData
 	
 	struct Node *colliders[COLDIM][COLDIM];
 	struct Task *taskListStart, *taskListEnd;
+	
+	struct NPC *npcListStart, *npcListEnd;
+	struct NPC *npcPoolStart, *npcPoolEnd;
 };
 
 void DebugDrawNormals(Model *model);
@@ -176,6 +194,11 @@ struct Node* CheckNodeCollision(struct Node *node);
 void ScheduleTask( void (*task)(void *data), void *data, float maxTime );
 void PollTasks();
 void RespawnPollen(void *data);
+void InitNPCS();
+void RemoveNPCS();
+void DrawNPCS();
+void SpawnNPC();
+void ProcessNPCS();
 
 void GameplayInit();
 void GameplayExit();
