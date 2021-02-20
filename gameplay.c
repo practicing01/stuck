@@ -25,6 +25,8 @@ void ProcessNPCS()
 		
 		if ( (*curNode).elapsedLerp >= 1.0f )
 		{
+			(*curNode).elapsedLerp = 0.0f;
+			
 			if ( (*curNode).prev != NULL )
 			{
 				if ( (*curNode).next != NULL )//recouple
@@ -143,40 +145,33 @@ void ProcessNPCS()
 
 void SpawnNPC()
 {
-	if ( (* (struct GameplayData *)moduleData).npcPoolStart != NULL )
+	if ( (* (struct GameplayData *)moduleData).npcPoolEnd != NULL )
 	{
 		struct NPC *curNode;
-		curNode = (* (struct GameplayData *)moduleData).npcPoolStart;
+		curNode = (* (struct GameplayData *)moduleData).npcPoolEnd;
 		
 		(*curNode).node.position = (Vector3){0.0f, 0.0f, 0.0f};
 		(*curNode).dest = (* (* (struct GameplayData *)moduleData).curPlayer).node.position;
 		(*curNode).dest.y = 0.0f;
 		
+		Vector3 forward = Vector3Subtract( (*curNode).dest, (*curNode).node.position );
+		forward = Vector3Normalize( forward );
+
+		Vector3 up = (Vector3){0.0f, 0.0f, -1.0f};
+		Vector3 axis = Vector3Normalize( Vector3CrossProduct( up, forward ) );
+		float angle = acosf( Vector3DotProduct( up, forward ) );
+		
+		(*curNode).rotation = MatrixRotate( axis, angle );
+		
 		if ( (*curNode).prev != NULL )
 		{
-			if ( (*curNode).next != NULL )//recouple
-			{
-				(* (*curNode).prev).next = (*curNode).next;
-				(* (*curNode).next).prev = (*curNode).prev;
-			}
-			else//last curNode
-			{
-				(* (*curNode).prev).next = NULL;
-				(* (struct GameplayData *)moduleData).npcPoolEnd = (*curNode).prev;
-			}
+			(* (*curNode).prev).next = NULL;
+			(* (struct GameplayData *)moduleData).npcPoolEnd = (*curNode).prev;
 		}
 		else//first curNode
 		{
-			if ( (*curNode).next != NULL )
-			{
-				(* (*curNode).next).prev = NULL;
-				(* (struct GameplayData *)moduleData).npcPoolStart = (*curNode).next;
-			}
-			else//only task
-			{
-				(* (struct GameplayData *)moduleData).npcPoolStart = NULL;
-				(* (struct GameplayData *)moduleData).npcPoolEnd = NULL;
-			}
+			(* (struct GameplayData *)moduleData).npcPoolStart = NULL;
+			(* (struct GameplayData *)moduleData).npcPoolEnd = NULL;
 		}
 		
 		//add to list
@@ -200,14 +195,13 @@ void SpawnNPC()
 	ScheduleTask( &SpawnNPC, NULL, 1.0f);
 }
 
-void DrawNPCS()//todo switch to list instead of pool
+void DrawNPCS()
 {
-	Matrix rotation = MatrixIdentity();
 	Matrix translation;
 	Matrix transform;
 	
 	struct NPC *curNode;
-	curNode = (* (struct GameplayData *)moduleData).npcPoolStart;
+	curNode = (* (struct GameplayData *)moduleData).npcListStart;
 	
 	while (curNode != NULL)
 	{
@@ -226,7 +220,7 @@ void DrawNPCS()//todo switch to list instead of pool
 		(*curNode).node.position.y,
 		(*curNode).node.position.z );
 		
-		transform = MatrixMultiply( rotation, translation );
+		transform = MatrixMultiply( (*curNode).rotation, translation );
 		
 		(* (struct GameplayData *)moduleData).npcModels[ (*curNode).node.modelIndex ].transform = transform;
 		

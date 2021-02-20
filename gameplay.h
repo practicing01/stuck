@@ -122,6 +122,7 @@ struct NPC
 	float elapsedTime;
 	Vector3 dest;
 	float elapsedLerp;
+	Matrix rotation;
 	
 	struct NPC *prev, *next;
 };
