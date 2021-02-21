@@ -28,8 +28,12 @@
 #define MAXNPCCOUNT 25
 #define NPCSPEED 0.5f
 #define NPCSPAWNRADIUS 4.0f
+#define MAXCLOUDS 50
+#define CLOUDSPAWNRADIUS 50.0f
+#define CLOUDSPEED 0.1f
+#define CLOUDHEIGHT 40.0f
 
-//pbr
+//pbr: couldn't get it to work.
 #define CUBEMAP_SIZE        1024        // Cubemap texture size
 #define IRRADIANCE_SIZE       32        // Irradiance texture size
 #define PREFILTERED_SIZE     256        // Prefiltered HDR environment texture size
@@ -66,12 +70,12 @@ struct Node//todo node should contain animation data.
 {
 	enum NodeType type;
 	int modelIndex;
-	Vector3 position;
-	Vector3 rotation;
+	Vector3 position;//todo add dest pos member
+	Vector3 rotation;//todo add dest rot member
 	Vector3 scale;
 	int collisionMask;//node belongs to this mask.
 	int colliderMask;//node collides with this mask.
-	struct Trigger trigger;
+	struct Trigger trigger;//todo triggers
 	bool visible;
 	
 	struct Node *prev, *next;
@@ -176,6 +180,10 @@ struct GameplayData
 	
 	struct NPC *npcListStart, *npcListEnd;
 	struct NPC *npcPoolStart, *npcPoolEnd;
+	
+	struct NPC *cloudListStart, *cloudListEnd;
+	
+	int score;
 };
 
 void DebugDrawNormals(Model *model);
@@ -201,6 +209,10 @@ void RemoveNPCS();
 void DrawNPCS();
 void SpawnNPC();
 void ProcessNPCS();
+void InitClouds();
+void RemoveClouds();
+void DrawClouds();
+void ProcessClouds();
 
 void GameplayInit();
 void GameplayExit();

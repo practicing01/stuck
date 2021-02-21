@@ -10,6 +10,152 @@
 #define RLIGHTS_IMPLEMENTATION
 #include "rlights.h"
 
+
+void InitClouds()
+{
+	(* (struct GameplayData *)moduleData).cloudListStart = NULL;
+	(* (struct GameplayData *)moduleData).cloudListEnd = NULL;
+    
+    struct NPC dummyNode;
+	dummyNode.prev = NULL;
+	dummyNode.next = NULL;
+	
+	for (int x = 0; x < MAXCLOUDS; x++)
+	{
+		struct NPC *newCloud = (struct NPC *)malloc( sizeof(struct NPC) );
+		
+		(*newCloud).prev = NULL;
+		(*newCloud).next = NULL;
+		
+		if (dummyNode.prev == NULL)
+		{
+			dummyNode.prev = newCloud;
+			dummyNode.next = newCloud;
+			
+			(* (struct GameplayData *)moduleData).cloudListStart = newCloud;
+		}
+		else
+		{
+			(*newCloud).prev = dummyNode.next;
+			(*dummyNode.next).next = newCloud;
+			dummyNode.next = newCloud;
+			
+			(* (struct GameplayData *)moduleData).cloudListEnd = newCloud;
+		}
+		
+		
+		Vector3 start = (* (* (struct GameplayData *)moduleData).curPlayer).node.position;
+		start.x += (float)GetRandomValue(-CLOUDSPAWNRADIUS * 10.0f, CLOUDSPAWNRADIUS * 10.0f);
+		start.y = (float)GetRandomValue(CLOUDHEIGHT, CLOUDHEIGHT * 2.0f);
+		start.z += (float)GetRandomValue(-CLOUDSPAWNRADIUS * 10.0f, CLOUDSPAWNRADIUS * 10.0f);
+		
+		(*newCloud).start = start;
+		(*newCloud).node.position = start;
+		
+		Vector3 dest = (* (* (struct GameplayData *)moduleData).curPlayer).node.position;
+		dest.x += (float)GetRandomValue(-CLOUDSPAWNRADIUS * 10.0f, CLOUDSPAWNRADIUS * 10.0f);
+		dest.y = (float)GetRandomValue(CLOUDHEIGHT, CLOUDHEIGHT * 2.0f);
+		dest.z += (float)GetRandomValue(-CLOUDSPAWNRADIUS * 10.0f, CLOUDSPAWNRADIUS * 10.0f);
+		
+		(*newCloud).dest = dest;
+		
+		Vector3 forward = Vector3Subtract( dest, start );
+		forward = Vector3Normalize( forward );
+
+		Vector3 up = (Vector3){0.0f, 0.0f, -1.0f};
+		Vector3 axis = Vector3Normalize( Vector3CrossProduct( up, forward ) );
+		float angle = acosf( Vector3DotProduct( up, forward ) );
+		
+		(*newCloud).rotation = MatrixRotate( axis, angle );
+		
+		(*newCloud).elapsedLerp = 0.0f;
+	}
+}
+
+void RemoveClouds()
+{
+	struct NPC *curNode;
+	struct NPC *nextNode;
+	curNode = (* (struct GameplayData *)moduleData).cloudListStart;
+	
+	while (curNode != NULL)
+	{
+		nextNode = (*curNode).next;
+		
+		free(curNode);
+		
+		curNode = nextNode;
+	}
+	
+	(* (struct GameplayData *)moduleData).cloudListStart = NULL;
+	(* (struct GameplayData *)moduleData).cloudListEnd = NULL;
+}
+
+void DrawClouds()
+{
+	Matrix translation;
+	Matrix transform;
+	
+	struct NPC *curNode;
+	curNode = (* (struct GameplayData *)moduleData).cloudListStart;
+	
+	while (curNode != NULL)
+	{		
+		translation = MatrixTranslate( 
+		(*curNode).node.position.x,
+		(*curNode).node.position.y,
+		(*curNode).node.position.z );
+		
+		transform = MatrixMultiply( (*curNode).rotation, translation );
+		
+		(* (struct GameplayData *)moduleData).cloudModel.transform = transform;
+		
+		DrawModel( (* (struct GameplayData *)moduleData).cloudModel, (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
+		
+		curNode = (*curNode).next;
+	}
+}
+
+void ProcessClouds()
+{
+	struct NPC *curNode = (* (struct GameplayData *)moduleData).cloudListStart;
+	
+	while ( curNode != NULL )
+	{
+		(*curNode).elapsedLerp += CLOUDSPEED * dt.deltaTime;
+		
+		(*curNode).node.position = Vector3Lerp(
+		(*curNode).start,
+		(*curNode).dest,
+		(*curNode).elapsedLerp);
+		
+		if ( (*curNode).elapsedLerp >= 1.0f )
+		{
+			(*curNode).start = (*curNode).node.position;
+			
+			Vector3 dest = (* (* (struct GameplayData *)moduleData).curPlayer).node.position;
+			dest.x += (float)GetRandomValue(-CLOUDSPAWNRADIUS * 10.0f, CLOUDSPAWNRADIUS * 10.0f);
+			dest.y = (float)GetRandomValue(CLOUDHEIGHT, CLOUDHEIGHT * 2.0f);
+			dest.z += (float)GetRandomValue(-CLOUDSPAWNRADIUS * 10.0f, CLOUDSPAWNRADIUS * 10.0f);
+			
+			(*curNode).dest = dest;
+			
+			Vector3 forward = Vector3Subtract( dest, (*curNode).start );
+			forward = Vector3Normalize( forward );
+
+			Vector3 up = (Vector3){0.0f, 0.0f, -1.0f};
+			Vector3 axis = Vector3Normalize( Vector3CrossProduct( up, forward ) );
+			float angle = acosf( Vector3DotProduct( up, forward ) );
+			
+			(*curNode).rotation = MatrixRotate( axis, angle );
+			
+			(*curNode).elapsedLerp = 0.0f;
+		}
+		
+		curNode = (*curNode).next;
+	}
+}
+
 void ProcessNPCS()
 {
 	struct NPC *curNode = (* (struct GameplayData *)moduleData).npcListStart;
@@ -22,6 +168,12 @@ void ProcessNPCS()
 		(*curNode).start,
 		(*curNode).dest,
 		(*curNode).elapsedLerp);
+		
+		//collision check
+		if ( CheckCollisionSpheres(	(* (* (struct GameplayData *)moduleData).curPlayer).node.position, 0.5f,	(*curNode).node.position, 0.5f) )
+		{
+			(* (struct GameplayData *)moduleData).score = 0;
+		}
 		
 		if ( (*curNode).elapsedLerp >= 1.0f )
 		{
@@ -623,6 +775,8 @@ void DrawTiles()
 				(* (struct GameplayData *)moduleData).flowerModels[ (*curFlower).modelIndex ].transform = transform;
 				
 				DrawModel( (* (struct GameplayData *)moduleData).flowerModels[ (*curFlower).modelIndex ], (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
+				
+				//DebugDrawNormals( &( (* (struct GameplayData *)moduleData).flowerModels[ (*curFlower).modelIndex ] ) );
 				
 				curFlower = (*curFlower).next;
 			}
@@ -1423,6 +1577,8 @@ void MovePlayer()
 			{
 				(*pollenHit).visible = false;
 				ScheduleTask( &RespawnPollen, pollenHit, 30.0f);
+				
+				(* (struct GameplayData *)moduleData).score++;
 			}
 		}
 	}
@@ -1807,6 +1963,10 @@ void GameplayInit()
 	InitNPCS();
 	SpawnNPC();
 	
+	InitClouds();
+	
+	(*data).score = 0;
+	
 	(*data).moveDir.x = 0.0f;(*data).moveDir.y = 0.0f;(*data).moveDir.z = 0.0f;
 	(*data).playerRotAngle = 0.0f;
 	
@@ -1828,6 +1988,7 @@ void GameplayExit()//todo move these to their respective functions
 	RemoveTiles();
 	RemovePlayers();
 	RemoveNPCS();
+	RemoveClouds();
 	
 	for (int x = 0; x < (* (struct GameplayData *)moduleData).buildingCount; x++)
 	{
@@ -1930,6 +2091,8 @@ void GameplayLoop()
 	
 	ProcessNPCS();
 	
+	ProcessClouds();
+	
 	drawNodesCam.target = (* (* (struct GameplayData *)moduleData).curPlayer).node.position;
 	UpdateCamera( &drawNodesCam );
 	
@@ -1937,7 +2100,7 @@ void GameplayLoop()
 	
 	BeginMode3D(drawNodesCam);
 
-	ClearBackground(RAYWHITE);
+	ClearBackground(BLACK);
 	
 	//temp for debugging drawing:
 	//MovePlayer();
@@ -1945,6 +2108,8 @@ void GameplayLoop()
 	DrawTiles();
 	
 	DrawNPCS();
+	
+	DrawClouds();
 	
 	DrawPlayer();
 	
@@ -1956,6 +2121,8 @@ void GameplayLoop()
 	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.y,
 	(* (* (struct GameplayData *)moduleData).curPlayer).node.position.z),
 	190, 250, 20, YELLOW);*/
+	
+	DrawText(TextFormat("Score: %d", (* (struct GameplayData *)moduleData).score ), 0, 0, 20, YELLOW);
 	
 	EndDrawing();
 	
@@ -2060,7 +2227,7 @@ void UpdateEditorCamera(Camera3D *camera)
 }
 //
 
-//pbr
+//pbr didn't work
 static void LoadMaterialPBR(Material *mat, char *path)
 {
 	Color albedo = (Color){ 255, 255, 255, 255 };
