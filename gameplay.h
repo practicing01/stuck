@@ -32,6 +32,8 @@
 #define CLOUDSPAWNRADIUS 50.0f
 #define CLOUDSPEED 0.1f
 #define CLOUDHEIGHT 40.0f
+#define MAXDROPLETCOUNT 100
+#define DROPLETSPEED 0.5f
 
 //pbr: couldn't get it to work.
 #define CUBEMAP_SIZE        1024        // Cubemap texture size
@@ -181,6 +183,9 @@ struct GameplayData
 	struct NPC *npcListStart, *npcListEnd;
 	struct NPC *npcPoolStart, *npcPoolEnd;
 	
+	struct NPC *dropletListStart, *dropletListEnd;
+	struct NPC *dropletPoolStart, *dropletPoolEnd;
+	
 	struct NPC *cloudListStart, *cloudListEnd;
 	
 	int score;
@@ -213,6 +218,11 @@ void InitClouds();
 void RemoveClouds();
 void DrawClouds();
 void ProcessClouds();
+void InitDroplets();
+void RemoveDroplets();
+void DrawDroplets();
+void SpawnDroplets();
+void ProcessDroplets();
 
 void GameplayInit();
 void GameplayExit();

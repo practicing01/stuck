@@ -10,6 +10,306 @@
 #define RLIGHTS_IMPLEMENTATION
 #include "rlights.h"
 
+void InitDroplets()
+{
+	(* (struct GameplayData *)moduleData).dropletPoolStart = NULL;
+	(* (struct GameplayData *)moduleData).dropletPoolEnd = NULL;
+	(* (struct GameplayData *)moduleData).dropletListStart = NULL;
+	(* (struct GameplayData *)moduleData).dropletListEnd = NULL;
+    
+    struct NPC dummyNPC;
+	dummyNPC.prev = NULL;
+	dummyNPC.next = NULL;
+	
+	for (int x = 0; x < MAXDROPLETCOUNT; x++)
+	{
+		struct NPC *newNPC = (struct NPC *)malloc( sizeof(struct NPC) );
+		
+		(*newNPC).prev = NULL;
+		(*newNPC).next = NULL;
+		
+		if (dummyNPC.prev == NULL)
+		{
+			dummyNPC.prev = newNPC;
+			dummyNPC.next = newNPC;
+			
+			(* (struct GameplayData *)moduleData).dropletPoolStart = newNPC;
+		}
+		else
+		{
+			(*newNPC).prev = dummyNPC.next;
+			(*dummyNPC.next).next = newNPC;
+			dummyNPC.next = newNPC;
+			
+			(* (struct GameplayData *)moduleData).dropletPoolEnd = newNPC;
+		}
+		
+		(*newNPC).node.position.x = 0.0f;
+		(*newNPC).node.position.y = 0.0f;
+		(*newNPC).node.position.z = 0.0f;
+		
+		(*newNPC).node.type = NPCS;
+		(*newNPC).elapsedLerp = 0.0f;
+		(*newNPC).rotation = MatrixIdentity();
+	}
+}
+
+void RemoveDroplets()
+{
+	struct NPC *curNode;
+	struct NPC *nextNode;
+	curNode = (* (struct GameplayData *)moduleData).dropletPoolStart;
+	
+	while (curNode != NULL)
+	{
+		nextNode = (*curNode).next;
+		
+		free(curNode);
+		
+		curNode = nextNode;
+	}
+	
+	curNode = (* (struct GameplayData *)moduleData).dropletListStart;
+	
+	while (curNode != NULL)
+	{
+		nextNode = (*curNode).next;
+		
+		free(curNode);
+		
+		curNode = nextNode;
+	}
+	
+	(* (struct GameplayData *)moduleData).dropletPoolStart = NULL;
+	(* (struct GameplayData *)moduleData).dropletPoolEnd = NULL;
+	(* (struct GameplayData *)moduleData).dropletListStart = NULL;
+	(* (struct GameplayData *)moduleData).dropletListEnd = NULL;
+}
+
+void DrawDroplets()
+{
+	Matrix translation;
+	Matrix transform;
+	
+	struct NPC *curNode;
+	curNode = (* (struct GameplayData *)moduleData).dropletListStart;
+	
+	while (curNode != NULL)
+	{
+		translation = MatrixTranslate( 
+		(*curNode).node.position.x,
+		(*curNode).node.position.y,
+		(*curNode).node.position.z );
+		
+		transform = MatrixMultiply( (*curNode).rotation, translation );
+		
+		(* (struct GameplayData *)moduleData).dropletModel.transform = transform;
+		
+		DrawModel( (* (struct GameplayData *)moduleData).dropletModel, (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
+		
+		curNode = (*curNode).next;
+	}
+}
+
+void SpawnDroplets()
+{
+	struct NPC *curCloud = (* (struct GameplayData *)moduleData).cloudListStart;
+	
+	while ( curCloud != NULL )
+	{
+		if ( GetRandomValue(0, 1) )
+		{
+			if ( (* (struct GameplayData *)moduleData).dropletPoolEnd != NULL )
+			{
+				struct NPC *curNode;
+				curNode = (* (struct GameplayData *)moduleData).dropletPoolEnd;
+				
+				(*curNode).node.position = (*curCloud).node.position;
+				(*curNode).start = (*curCloud).node.position;
+				(*curNode).dest = (*curCloud).node.position;
+				(*curNode).dest.y = 0.0f;
+				(*curNode).elapsedLerp = 0.0f;
+				
+				if ( (*curNode).prev != NULL )
+				{
+					(* (*curNode).prev).next = NULL;
+					(* (struct GameplayData *)moduleData).dropletPoolEnd = (*curNode).prev;
+				}
+				else//first curNode
+				{
+					(* (struct GameplayData *)moduleData).dropletPoolStart = NULL;
+					(* (struct GameplayData *)moduleData).dropletPoolEnd = NULL;
+				}
+				
+				//add to list
+				if ( (* (struct GameplayData *)moduleData).dropletListStart == NULL )//no nodes
+				{
+					(* (struct GameplayData *)moduleData).dropletListStart = curNode;
+					(* (struct GameplayData *)moduleData).dropletListEnd = curNode;
+					
+					(*curNode).prev = NULL;
+					(*curNode).next = NULL;
+				}
+				else//nodes waiting
+				{
+					(* (* (struct GameplayData *)moduleData).dropletListEnd).next = curNode;
+					(*curNode).prev = (* (struct GameplayData *)moduleData).dropletListEnd;
+					(* (struct GameplayData *)moduleData).dropletListEnd = curNode;
+					(*curNode).next = NULL;
+				}
+			}
+			else
+			{
+				ScheduleTask( &SpawnDroplets, NULL, 1.0f);
+				return;
+			}
+		}
+		
+		curCloud = (*curCloud).next;		
+	}
+	
+	ScheduleTask( &SpawnDroplets, NULL, 1.0f);
+}
+
+void ProcessDroplets()//todo dedicated function for recoupling linked lists
+{
+	struct NPC *curNode = (* (struct GameplayData *)moduleData).dropletListStart;
+	
+	while ( curNode != NULL )
+	{
+		(*curNode).elapsedLerp += DROPLETSPEED * dt.deltaTime;
+		
+		(*curNode).node.position = Vector3Lerp(
+		(*curNode).start,
+		(*curNode).dest,
+		(*curNode).elapsedLerp);
+		
+		//collision check
+		if ( CheckCollisionSpheres(	(* (* (struct GameplayData *)moduleData).curPlayer).node.position, 0.5f,	(*curNode).node.position, 0.5f) )
+		{
+			(* (struct GameplayData *)moduleData).score = 0;
+			//sound here
+		}
+		
+		if ( (*curNode).elapsedLerp >= 1.0f )
+		{
+			(*curNode).elapsedLerp = 0.0f;
+			
+			if ( (*curNode).prev != NULL )
+			{
+				if ( (*curNode).next != NULL )//recouple
+				{
+					(* (*curNode).prev).next = (*curNode).next;
+					(* (*curNode).next).prev = (*curNode).prev;
+					
+					struct NPC *dummy = curNode;
+					curNode = (*curNode).next;
+					
+					if ( (* (struct GameplayData *)moduleData).dropletPoolStart == NULL )//no nodes
+					{
+						(* (struct GameplayData *)moduleData).dropletPoolStart = dummy;
+						(* (struct GameplayData *)moduleData).dropletPoolEnd = dummy;
+						
+						(*dummy).prev = NULL;
+						(*dummy).next = NULL;
+					}
+					else//nodes waiting
+					{
+						(* (* (struct GameplayData *)moduleData).dropletPoolEnd).next = dummy;
+						(*dummy).prev = (* (struct GameplayData *)moduleData).dropletPoolEnd;
+						(* (struct GameplayData *)moduleData).dropletPoolEnd = dummy;
+						(*dummy).next = NULL;
+					}
+		
+					continue;
+				}
+				else//last node
+				{
+					(* (*curNode).prev).next = NULL;
+					(* (struct GameplayData *)moduleData).dropletListEnd = (*curNode).prev;
+					
+					struct NPC *dummy = curNode;
+					
+					if ( (* (struct GameplayData *)moduleData).dropletPoolStart == NULL )//no nodes
+					{
+						(* (struct GameplayData *)moduleData).dropletPoolStart = dummy;
+						(* (struct GameplayData *)moduleData).dropletPoolEnd = dummy;
+						
+						(*dummy).prev = NULL;
+						(*dummy).next = NULL;
+					}
+					else//nodes waiting
+					{
+						(* (* (struct GameplayData *)moduleData).dropletPoolEnd).next = dummy;
+						(*dummy).prev = (* (struct GameplayData *)moduleData).dropletPoolEnd;
+						(* (struct GameplayData *)moduleData).dropletPoolEnd = dummy;
+						(*dummy).next = NULL;
+					}
+					
+					curNode = NULL;
+					continue;
+				}
+			}
+			else//first node
+			{
+				if ( (*curNode).next != NULL )
+				{
+					(* (*curNode).next).prev = NULL;
+					(* (struct GameplayData *)moduleData).dropletListStart = (*curNode).next;
+					
+					struct NPC *dummy = curNode;
+					curNode = (*curNode).next;
+					
+					if ( (* (struct GameplayData *)moduleData).dropletPoolStart == NULL )//no nodes
+					{
+						(* (struct GameplayData *)moduleData).dropletPoolStart = dummy;
+						(* (struct GameplayData *)moduleData).dropletPoolEnd = dummy;
+						
+						(*dummy).prev = NULL;
+						(*dummy).next = NULL;
+					}
+					else//nodes waiting
+					{
+						(* (* (struct GameplayData *)moduleData).dropletPoolEnd).next = dummy;
+						(*dummy).prev = (* (struct GameplayData *)moduleData).dropletPoolEnd;
+						(* (struct GameplayData *)moduleData).dropletPoolEnd = dummy;
+						(*dummy).next = NULL;
+					}
+					
+					continue;
+				}
+				else//only node
+				{
+					(* (struct GameplayData *)moduleData).dropletListStart = NULL;
+					(* (struct GameplayData *)moduleData).dropletListEnd = NULL;
+					
+					struct NPC *dummy = curNode;
+					
+					if ( (* (struct GameplayData *)moduleData).dropletPoolStart == NULL )//no nodes
+					{
+						(* (struct GameplayData *)moduleData).dropletPoolStart = dummy;
+						(* (struct GameplayData *)moduleData).dropletPoolEnd = dummy;
+						
+						(*dummy).prev = NULL;
+						(*dummy).next = NULL;
+					}
+					else//nodes waiting
+					{
+						(* (* (struct GameplayData *)moduleData).dropletPoolEnd).next = dummy;
+						(*dummy).prev = (* (struct GameplayData *)moduleData).dropletPoolEnd;
+						(* (struct GameplayData *)moduleData).dropletPoolEnd = dummy;
+						(*dummy).next = NULL;
+					}
+					
+					curNode = NULL;
+					continue;
+				}
+			}
+		}
+		
+		curNode = (*curNode).next;
+	}
+}
 
 void InitClouds()
 {
@@ -173,6 +473,7 @@ void ProcessNPCS()
 		if ( CheckCollisionSpheres(	(* (* (struct GameplayData *)moduleData).curPlayer).node.position, 0.5f,	(*curNode).node.position, 0.5f) )
 		{
 			(* (struct GameplayData *)moduleData).score = 0;
+			//sound here
 		}
 		
 		if ( (*curNode).elapsedLerp >= 1.0f )
@@ -1579,6 +1880,7 @@ void MovePlayer()
 				ScheduleTask( &RespawnPollen, pollenHit, 30.0f);
 				
 				(* (struct GameplayData *)moduleData).score++;
+				//sound here
 			}
 		}
 	}
@@ -1964,6 +2266,8 @@ void GameplayInit()
 	SpawnNPC();
 	
 	InitClouds();
+	InitDroplets();
+	SpawnDroplets();
 	
 	(*data).score = 0;
 	
@@ -1989,6 +2293,7 @@ void GameplayExit()//todo move these to their respective functions
 	RemovePlayers();
 	RemoveNPCS();
 	RemoveClouds();
+	RemoveDroplets();
 	
 	for (int x = 0; x < (* (struct GameplayData *)moduleData).buildingCount; x++)
 	{
@@ -2092,6 +2397,7 @@ void GameplayLoop()
 	ProcessNPCS();
 	
 	ProcessClouds();
+	ProcessDroplets();
 	
 	drawNodesCam.target = (* (* (struct GameplayData *)moduleData).curPlayer).node.position;
 	UpdateCamera( &drawNodesCam );
@@ -2110,6 +2416,8 @@ void GameplayLoop()
 	DrawNPCS();
 	
 	DrawClouds();
+	
+	DrawDroplets();
 	
 	DrawPlayer();
 	
