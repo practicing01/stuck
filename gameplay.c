@@ -188,7 +188,7 @@ void ProcessDroplets()//todo dedicated function for recoupling linked lists
 		if ( CheckCollisionSpheres(	(* (* (struct GameplayData *)moduleData).curPlayer).node.position, 0.5f,	(*curNode).node.position, 0.5f) )
 		{
 			(* (struct GameplayData *)moduleData).score = 0;
-			//sound here
+			PlaySound( (* (struct GameplayData *)moduleData).droplet );
 		}
 		
 		if ( (*curNode).elapsedLerp >= 1.0f )
@@ -473,7 +473,7 @@ void ProcessNPCS()
 		if ( CheckCollisionSpheres(	(* (* (struct GameplayData *)moduleData).curPlayer).node.position, 0.5f,	(*curNode).node.position, 0.5f) )
 		{
 			(* (struct GameplayData *)moduleData).score = 0;
-			//sound here
+			PlaySound( (* (struct GameplayData *)moduleData).fly );
 		}
 		
 		if ( (*curNode).elapsedLerp >= 1.0f )
@@ -1074,10 +1074,9 @@ void DrawTiles()
 				transform = MatrixMultiply( rotation, translation );
 				
 				(* (struct GameplayData *)moduleData).flowerModels[ (*curFlower).modelIndex ].transform = transform;
+				//DebugDrawNormals( &( (* (struct GameplayData *)moduleData).flowerModels[ (*curFlower).modelIndex ] ) );
 				
 				DrawModel( (* (struct GameplayData *)moduleData).flowerModels[ (*curFlower).modelIndex ], (Vector3){0.0f,0.0f,0.0f}, 1.0f, WHITE);
-				
-				//DebugDrawNormals( &( (* (struct GameplayData *)moduleData).flowerModels[ (*curFlower).modelIndex ] ) );
 				
 				curFlower = (*curFlower).next;
 			}
@@ -1880,7 +1879,7 @@ void MovePlayer()
 				ScheduleTask( &RespawnPollen, pollenHit, 30.0f);
 				
 				(* (struct GameplayData *)moduleData).score++;
-				//sound here
+				PlaySound( (* (struct GameplayData *)moduleData).pollen );
 			}
 		}
 	}
@@ -2285,6 +2284,13 @@ void GameplayInit()
     //SetCameraMoveControls(KEY_W, KEY_S, KEY_D, KEY_A, KEY_E, KEY_Q);
     
     SetCameraMode( drawNodesCam, CAMERA_THIRD_PERSON );
+    
+    (*data).bgm = LoadMusicStream("art/sfx/Japanese-SciFI trap loop.ogg");
+    (*data).fly = LoadSound("art/sfx/item-sword23-v1.ogg");
+    (*data).droplet = LoadSound("art/sfx/water-splash12.ogg");
+    (*data).pollen = LoadSound("art/sfx/step148-gassy_footstep1.ogg");
+    
+    PlayMusicStream( (*data).bgm);
 }
 
 void GameplayExit()//todo move these to their respective functions
@@ -2374,6 +2380,11 @@ void GameplayExit()//todo move these to their respective functions
 	UnloadTexture( (* (struct GameplayData *)moduleData).cloudTex );
 	UnloadModel( (* (struct GameplayData *)moduleData).dropletModel );
 	UnloadTexture( (* (struct GameplayData *)moduleData).dropletTex );
+	
+	UnloadMusicStream( (* (struct GameplayData *)moduleData).bgm );
+	UnloadSound( (* (struct GameplayData *)moduleData).fly );
+	UnloadSound( (* (struct GameplayData *)moduleData).droplet );
+	UnloadSound( (* (struct GameplayData *)moduleData).pollen );
 }
 
 void GameplayLoop()
@@ -2388,6 +2399,8 @@ void GameplayLoop()
     (* (struct GameplayData *)moduleData).playerModels[ (* (* (struct GameplayData *)moduleData).curPlayer).node.modelIndex ].materials[0].shader.locs[LOC_VECTOR_VIEW],
     cameraPos,
     UNIFORM_VEC3);*/
+    
+    UpdateMusicStream( (* (struct GameplayData *)moduleData).bgm );
 
 	PollTasks();
 	

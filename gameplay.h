@@ -21,7 +21,7 @@
 #define FORWARDRAYMAXDIST 1.0f
 #define PLAYERSPEED 10.0f
 #define ROTSPEED 360.0f
-#define GRAVITY -1.0f
+#define GRAVITY -9.0f
 #define COLLIDERINTERVAL 10
 #define COLDIM 60//(TILESIZE/COLLIDERINTERVAL) * 3
 #define COLLIDEROFFSET 300.0f//(TILESIZE * TILEFACTOR) * 1.5f
@@ -189,6 +189,11 @@ struct GameplayData
 	struct NPC *cloudListStart, *cloudListEnd;
 	
 	int score;
+	
+	Music bgm;
+	Sound fly;
+	Sound droplet;
+	Sound pollen;
 };
 
 void DebugDrawNormals(Model *model);
