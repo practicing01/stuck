@@ -61,23 +61,25 @@ int main(void)
 {
     // Initialization
     //--------------------------------------------------------------------------------------
-    defaultRes.x = 800;
-    defaultRes.y = 450;
+    //defaultRes.x = 800;
+    //defaultRes.y = 450;
+    defaultRes.x = 1024;
+    defaultRes.y = 768;
     
     canExit = 0;
     
     //enum ModulePhase phase = SPLASH;
 
-    //InitWindow(defaultRes.x, defaultRes.y, "raylibtest");
-    InitWindow(800, 450, "raylibtest");
+    InitWindow(defaultRes.x, defaultRes.y, "raylibtest");
+    //InitWindow(800, 450, "raylibtest");
 
-    SetTargetFPS(30);               // Set our game to run at 30 frames-per-second
+    SetTargetFPS(60);               // Set our game to run at 30 frames-per-second
     
     InitAudioDevice();
     //--------------------------------------------------------------------------------------
 	
-	//SetModule(SPLASH);
-	SetModule(GAMEPLAY);
+	SetModule(SPLASH);
+	//SetModule(GAMEPLAY);
 	
     // Main game loop
     while (canExit == 0)

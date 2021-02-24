@@ -18,6 +18,8 @@ struct MenuData
 {
 	struct Butt playButt;
 	struct Butt exitButt;
+	
+	Texture2D tex;
 };
 
 void MenuInit();

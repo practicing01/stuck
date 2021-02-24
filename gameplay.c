@@ -2157,7 +2157,7 @@ void MovePlayer()
 
 void GameplayInit()
 {
-	SetWindowSize(1024, 768);
+	//SetWindowSize(1024, 768);
 	
 	dt.elapsedTime = 0.0f;
 	ModuleLoop = GameplayLoop;

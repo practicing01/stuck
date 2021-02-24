@@ -56,18 +56,41 @@ void MenuInit()
 	
 	moduleData = data;
 	ModuleLoop = MenuLoop;
+	
+	Image image = LoadImage("menu.png");
+	
+	dims.x = image.width;
+	dims.y = image.height;
+	curRes.x = GetScreenWidth();
+	curRes.y = GetScreenHeight();
+	
+	ScaleVec2(&scaledDims, &dims, &defaultRes, &curRes);
+	
+	ImageResize(&image, scaledDims.x, scaledDims.y);
+	
+	(* (struct MenuData *)moduleData).tex = LoadTextureFromImage(image);
+		
+	UnloadImage(image);
 }
 
 void MenuExit()
 {
+	UnloadTexture( (* (struct MenuData *)moduleData).tex );
 	free( (struct MenuData *)moduleData );
 	moduleData = NULL;
 }
 
 void MenuLoop()
 {
+	int screenWidth = GetScreenWidth();
+	int screenHeight = GetScreenHeight();
+	int width = (* (struct MenuData *)moduleData).tex.width;
+	int height = (* (struct MenuData *)moduleData).tex.height;
+	
 	BeginDrawing();
 		ClearBackground(RAYWHITE);
+		
+		DrawTexture( (* (struct MenuData *)moduleData).tex ,screenWidth/2 - width/2, screenHeight/2 - height/2, WHITE);
 		
 		//Play butt
 		
